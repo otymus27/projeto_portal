@@ -1,0 +1,60 @@
+version: "3.8"
+
+services:
+    mysql:
+        image: mysql:8.0
+        container_name: mysql_carro
+        restart: always
+        environment:
+            MYSQL_ROOT_PASSWORD: root
+            MYSQL_DATABASE: db_carro
+        ports:
+            - "3306:3306"
+        volumes:
+            - mysql-data-carro:/var/lib/mysql
+        networks:
+            - otymus-net
+        healthcheck:
+            test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -proot"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+
+    backend:
+        build:
+            context: ./api-carro
+            dockerfile: Dockerfile
+        container_name: api_carro
+        environment:
+            SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/db_carro?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+            SPRING_DATASOURCE_USERNAME: root
+            SPRING_DATASOURCE_PASSWORD: root
+            SPRING_JPA_HIBERNATE_DDL_AUTO: none
+        depends_on:
+            mysql:
+                condition: service_healthy
+        ports:
+            - "8082:8080" # ✅ Nova porta para o backend
+        networks:
+            - otymus-net
+
+    nginx:
+        build:
+            context: ./app-carro
+            dockerfile: Dockerfile
+        container_name: nginx_carro
+        ports:
+            - "86:80" # ✅ Caminho para a pasta do segundo frontend
+        volumes:
+            - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+        depends_on:
+            - backend
+        networks:
+            - otymus-net
+
+volumes:
+    mysql-data:
+    mysql-data-carro: # ✅ Novo volume para o segundo banco de dados
+
+networks:
+    otymus-net: {}
