@@ -1,105 +1,138 @@
 package br.com.carro.services;
 
 import br.com.carro.entities.Pasta;
-import br.com.carro.entities.Setor;
-import br.com.carro.entities.Usuario.Usuario;
 import br.com.carro.repositories.PastaRepository;
+import br.com.carro.repositories.SetorRepository;
+import br.com.carro.repositories.UsuarioRepository;
+import jakarta.persistence.EntityNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Optional;
-import java.util.stream.Collectors;
 
 @Service
 public class PastaService {
 
+    private final PastaRepository pastaRepository;
+    private final SetorRepository setorRepository;
+    private final UsuarioRepository usuarioRepository;
+
     @Autowired
-    private PastaRepository pastaRepository;
+    public PastaService(PastaRepository pastaRepository, SetorRepository setorRepository, UsuarioRepository usuarioRepository) {
+        this.pastaRepository = pastaRepository;
+        this.setorRepository = setorRepository;
+        this.usuarioRepository = usuarioRepository;
+    }
 
     /**
-     * Lista as pastas acessíveis ao usuário logado, filtrando por perfil e setor.
-     *
-     * @param usuarioLogado O usuário autenticado, obtido do Spring Security.
-     * @return Uma lista de pastas que o usuário tem permissão para visualizar.
+     * Lista pastas principais (raiz) de acordo com a role do usuário.
+     * ADMIN vê todas as pastas principais. Outros usuários vêem apenas as do seu setor.
+     * @param setorId O ID do setor do usuário logado. Pode ser nulo para ADMIN.
+     * @param isAdmin Verdadeiro se o usuário logado for ADMIN.
+     * @param pageable Objeto de paginação e ordenação.
+     * @return Uma página de objetos Pasta.
      */
-    @Transactional(readOnly = true)
-    public List<Pasta> listarPastas(Usuario usuarioLogado) {
-        // Se for um administrador, retorna todas as pastas.
-        boolean isAdmin = usuarioLogado.getRoles().stream().anyMatch(r -> r.getNome().equals("ADMINISTRADOR"));
+    public Page<Pasta> listarPastasPrincipais(Long setorId, boolean isAdmin, Pageable pageable) {
         if (isAdmin) {
-            return pastaRepository.findAll();
+            // Se for ADMIN, ele pode ver todas as pastas principais de todos os setores.
+            return pastaRepository.findByPastaPaiIsNull(pageable);
+        } else {
+            // Para outros usuários, a busca é restrita ao setor.
+            if (setorId == null) {
+                throw new IllegalArgumentException("Usuário sem setor definido.");
+            }
+            if (!setorRepository.existsById(setorId)) {
+                throw new EntityNotFoundException("Setor não encontrado com o ID: " + setorId);
+            }
+            return pastaRepository.findBySetorIdAndPastaPaiIsNull(setorId, pageable);
         }
-
-        // Se for um gerente ou básico, retorna apenas as pastas do seu setor.
-        Setor setorDoUsuario = usuarioLogado.getSetor();
-
-        return pastaRepository.findAll().stream()
-                .filter(pasta -> pasta.getSetor() != null && pasta.getSetor().equals(setorDoUsuario))
-                .collect(Collectors.toList());
     }
 
     /**
-     * Cria uma nova pasta com base nas permissões do usuário.
-     *
-     * @param novaPasta Dados da pasta a ser criada.
-     * @param usuarioLogado O usuário que está criando a pasta.
-     * @return A pasta criada e salva no banco de dados.
-     * @throws IllegalAccessException Se o usuário não tiver permissão para criar a pasta.
+     * Lista as subpastas de uma pasta pai específica.
+     * @param pastaPaiId O ID da pasta pai.
+     * @param pageable Objeto de paginação e ordenação.
+     * @return Uma página de subpastas.
      */
-    @Transactional
-    public Pasta criarPasta(Pasta novaPasta, Usuario usuarioLogado) throws IllegalAccessException {
-        // Apenas Gerentes e Administradores podem criar pastas.
-        boolean temPermissao = usuarioLogado.getRoles().stream()
-                .anyMatch(r -> r.getNome().equals("ADMINISTRADOR") || r.getNome().equals("GERENTE"));
-
-        if (!temPermissao) {
-            throw new IllegalAccessException("Você não tem permissão para criar pastas.");
-        }
-
-        // Define o setor da pasta com base no setor do usuário
-        novaPasta.setSetor(usuarioLogado.getSetor());
-        novaPasta.setDataCriacao(LocalDateTime.now());
-        // Lógica para definir o caminho completo da pasta
-        // Exemplo: /Financas/Pasta_Financeira_01
-        novaPasta.setCaminhoCompleto("/" + usuarioLogado.getSetor().getNome() + "/" + novaPasta.getNomePasta());
-
-        return pastaRepository.save(novaPasta);
+    public Page<Pasta> listarSubpastas(Long pastaPaiId, Pageable pageable) {
+        pastaRepository.findById(pastaPaiId)
+                .orElseThrow(() -> new EntityNotFoundException("Pasta pai não encontrada com o ID: " + pastaPaiId));
+        return pastaRepository.findByPastaPaiId(pastaPaiId, pageable);
     }
 
     /**
-     * Deleta uma pasta e seus conteúdos.
-     *
-     * @param pastaId O ID da pasta a ser deletada.
-     * @param usuarioLogado O usuário que está tentando deletar a pasta.
-     * @throws IllegalAccessException   Se o usuário não tiver permissão para deletar a pasta.
-     * @throws IllegalArgumentException Se a pasta não for encontrada ou se for uma pasta raiz do setor.
+     * Busca uma pasta por ID.
+     * @param id O ID da pasta.
+     * @return O objeto Pasta correspondente.
      */
-    @Transactional
-    public void deletarPasta(Long pastaId, Usuario usuarioLogado) throws IllegalAccessException, IllegalArgumentException {
-        // Apenas Administradores e Gerentes podem deletar pastas.
-        boolean temPermissao = usuarioLogado.getRoles().stream()
-                .anyMatch(r -> r.getNome().equals("ADMINISTRADOR") || r.getNome().equals("GERENTE"));
-        boolean isAdmin = usuarioLogado.getRoles().stream().anyMatch(r -> r.getNome().equals("ADMINISTRADOR"));
+    public Pasta buscarPorId(Long id) {
+        return pastaRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Pasta não encontrada com o ID: " + id));
+    }
 
-        if (!temPermissao) {
-            throw new IllegalAccessException("Você não tem permissão para apagar pastas.");
+    /**
+     * Cria uma nova pasta com validações de relacionamentos.
+     * @param pasta O objeto Pasta a ser criado.
+     * @return A pasta criada.
+     */
+    public Pasta criarPasta(Pasta pasta) {
+        if (pasta.getNomePasta() == null || pasta.getNomePasta().isBlank()) {
+            throw new IllegalArgumentException("O nome da pasta não pode ser vazio.");
         }
 
-        Optional<Pasta> pastaOptional = pastaRepository.findById(pastaId);
-        if (pastaOptional.isEmpty()) {
-            throw new IllegalArgumentException("Pasta não encontrada.");
+        if (pasta.getPastaPai() != null && pasta.getPastaPai().getId() != null) {
+            pastaRepository.findById(pasta.getPastaPai().getId())
+                    .orElseThrow(() -> new EntityNotFoundException("A pasta pai informada não existe."));
+        } else {
+            if (pasta.getSetor() == null || pasta.getSetor().getId() == null) {
+                throw new IllegalArgumentException("Uma pasta principal deve ser associada a um setor válido.");
+            }
+            setorRepository.findById(pasta.getSetor().getId())
+                    .orElseThrow(() -> new EntityNotFoundException("O setor informado não existe."));
         }
 
-        Pasta pastaParaDeletar = pastaOptional.get();
-
-        // Regra de negócio: Gerentes não podem apagar as pastas principais (raízes) do setor.
-        if (pastaParaDeletar.getSetor() != null && !isAdmin) {
-            throw new IllegalAccessException("Apenas administradores podem apagar pastas principais de um setor.");
+        if (pasta.getUsuariosComPermissao() != null && !pasta.getUsuariosComPermissao().isEmpty()) {
+            pasta.getUsuariosComPermissao().forEach(usuario -> {
+                if (!usuarioRepository.existsById(usuario.getId())) {
+                    throw new EntityNotFoundException("Usuário com ID " + usuario.getId() + " para permissão não encontrado.");
+                }
+            });
         }
 
-        pastaRepository.delete(pastaParaDeletar);
+        pasta.setDataCriacao(LocalDateTime.now());
+        return pastaRepository.save(pasta);
+    }
+
+    /**
+     * Atualiza uma pasta existente.
+     * @param id O ID da pasta a ser atualizada.
+     * @param pastaAtualizada O objeto com os dados de atualização.
+     * @return A pasta atualizada.
+     */
+    public Pasta atualizar(Long id, Pasta pastaAtualizada) {
+        Pasta pastaExistente = pastaRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Pasta não encontrada com o ID: " + id));
+
+        if (pastaAtualizada.getNomePasta() != null) {
+            pastaExistente.setNomePasta(pastaAtualizada.getNomePasta());
+        }
+        if (pastaAtualizada.getCaminhoCompleto() != null) {
+            pastaExistente.setCaminhoCompleto(pastaAtualizada.getCaminhoCompleto());
+        }
+
+        return pastaRepository.save(pastaExistente);
+    }
+
+    /**
+     * Exclui uma pasta por ID, incluindo suas subpastas.
+     * @param id O ID da pasta a ser excluída.
+     */
+    public void excluir(Long id) {
+        if (!pastaRepository.existsById(id)) {
+            throw new EntityNotFoundException("Pasta não encontrada com o ID: " + id);
+        }
+        pastaRepository.deleteById(id);
     }
 }

@@ -35,7 +35,7 @@ public class Setor {
      * é gerenciado pelo campo 'setor' na entidade Usuario.
      */
     @OneToMany(mappedBy = "setor")
-    @JsonBackReference("setor-usuarios")
+    @JsonBackReference("setor-usuarios") // ✅ Já ignora a serialização ou recursividade infinita
     private Set<Usuario> usuarios;
 
     /**
@@ -43,6 +43,6 @@ public class Setor {
      * Um Setor pode ter muitas Pastas que são consideradas 'principais' ou raiz.
      */
     @OneToMany(mappedBy = "setor")
-    @JsonBackReference("setor-pastasPrincipais")
+    @JsonBackReference("setor-pastasPrincipais") // ✅ Já ignora a serialização ou recursividade infinita
     private Set<Pasta> pastasPrincipais;
 }

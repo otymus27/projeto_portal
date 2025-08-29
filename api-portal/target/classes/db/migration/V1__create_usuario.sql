@@ -54,6 +54,16 @@ CREATE TABLE IF NOT EXISTS tb_arquivo (
     CONSTRAINT fk_arquivos_usuarios FOREIGN KEY (criado_por_id) REFERENCES tb_usuarios (id)
 );
 
+-- Associacao com a tabela usuario que permite acesso a determinada pasta
+CREATE TABLE tb_permissao_pasta (
+     pasta_id BIGINT NOT NULL,
+     usuario_id BIGINT NOT NULL,
+     PRIMARY KEY (pasta_id, usuario_id),
+     FOREIGN KEY (pasta_id) REFERENCES tb_pasta(id),
+     FOREIGN KEY (usuario_id) REFERENCES tb_usuarios(id)
+);
+
+
 -- Inserção de roles
 INSERT INTO tb_roles (nome) VALUES
                                 ('ADMIN'),
@@ -71,7 +81,7 @@ INSERT INTO tb_setor (nome) VALUES
 -- Inserção de usuários
 INSERT INTO tb_usuarios (username, password, senha_provisoria,setor_id) VALUES
                                                                    ('admin', '$2a$12$jQ0dPE2juypEy07pKe1uBOjcUzxJq8lSIb/nM1.pQATbzWvoB0kN2', FALSE,4),  -- senha: senha123
-                                                                   ('gabriel', '$2a$10$wgeAMfb8E1olrHj5Ko5P7T7FyvhYrgHQt18sJll8eLg1BYJc0AXve', TRUE,1),  -- senha: senha456
+                                                                   ('gabriel', '$2a$12$jQ0dPE2juypEy07pKe1uBOjcUzxJq8lSIb/nM1.pQATbzWvoB0kN2', TRUE,1),  -- senha: senha456
                                                                    ('beatriz', '$2a$10$Vt6ldlS92W5N6HF1OS5qfIWdb0P7Zfjdqxq6rzQ3S1CnllXaZRaBu', FALSE,2), -- senha: senha789
                                                                    ('14329301', '$2a$12$jQ0dPE2juypEy07pKe1uBOjcUzxJq8lSIb/nM1.pQATbzWvoB0kN2', TRUE,3),   -- senha: senha123
                                                                    ('usuario5', '$2a$10$ADqjEwM1joxBvl0ivQiqK3odF2gGbzRslfvtnwTqfmRbx11P0RHgi', FALSE,2);  -- senha: senha202
@@ -92,6 +102,21 @@ INSERT INTO tb_pasta (nome_pasta, caminho_completo, data_criacao, setor_id, past
                             ('Docs-RH', '/RH/Docs-RH', NOW(), 2, NULL),
                             ('Projetos-TI', '/TI/Projetos-TI', NOW(), 4, NULL),
                             ('Contratos', '/Juridico/Contratos', NOW(), 5, NULL);
+
+-- 1. Permite que o Usuário 1 (ex: João) acesse a Pasta 1 (ex: Relatórios Financeiros)
+INSERT INTO tb_permissao_pasta (pasta_id, usuario_id) VALUES (1, 1);
+
+-- 2. Permite que o Usuário 2 (ex: Maria) acesse a Pasta 1 (ex: Relatórios Financeiros)
+INSERT INTO tb_permissao_pasta (pasta_id, usuario_id) VALUES (1, 2);
+
+-- 3. Permite que o Usuário 3 (ex: Carlos) acesse a Pasta 2 (ex: Documentos de Vendas)
+INSERT INTO tb_permissao_pasta (pasta_id, usuario_id) VALUES (2, 3);
+
+-- 4. Permite que o Usuário 4 (ex: Ana) acesse a Pasta 3 (ex: Materiais de Marketing)
+INSERT INTO tb_permissao_pasta (pasta_id, usuario_id) VALUES (3, 4);
+
+-- 5. O Usuário 1 (ex: João) também tem acesso à Pasta 3
+INSERT INTO tb_permissao_pasta (pasta_id, usuario_id) VALUES (3, 1);
 
 -- Cada arquivo está associado a uma pasta e a um usuário que o criou.
 -- Caminho de armazenamento é apenas um exemplo.

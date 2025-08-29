@@ -1,6 +1,8 @@
 package br.com.carro.entities;
 
 import br.com.carro.entities.Usuario.Usuario;
+import com.fasterxml.jackson.annotation.JsonBackReference;
+import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -42,30 +44,38 @@ public class Pasta {
      * Este campo define a qual setor uma pasta principal pertence.
      * Será nulo para subpastas.
      */
+    // ✅ Adicione @JsonManagedReference para gerenciar a serialização
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "setor_id")
+    @JsonManagedReference("setor-pastasPrincipais")
     private Setor setor;
 
     /**
      * Relacionamento de auto-referência para criar a hierarquia.
      * A 'pastaPai' aponta para a pasta acima dela na árvore.
      */
+    // ✅ Adicione @JsonManagedReference para o relacionamento de auto-referência
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "pasta_pai_id")
+    @JsonManagedReference("pasta-subpastas")
     private Pasta pastaPai;
 
     /**
      * Lista de subpastas dentro desta pasta.
      * O 'cascade' e 'orphanRemoval' garantem que subpastas sejam deletadas junto com a pasta pai.
      */
+    // ✅ Adicione @JsonBackReference para evitar a recursão infinita
     @OneToMany(mappedBy = "pastaPai", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonBackReference("pasta-subpastas")
     private List<Pasta> subpastas;
 
     /**
      * Lista de arquivos contidos nesta pasta.
      * Também usa 'cascade' para gerenciar a exclusão de arquivos quando a pasta é apagada.
      */
+    // ✅ Adicione @JsonBackReference para a lista de arquivos
     @OneToMany(mappedBy = "pasta", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonBackReference("pasta-arquivos")
     private List<Arquivo> arquivos;
 
     /**
@@ -80,7 +90,7 @@ public class Pasta {
      */
     @ManyToMany
     @JoinTable(
-            name = "permissao_pasta_usuario",
+            name = "tb_permissao_pasta",
             joinColumns = @JoinColumn(name = "pasta_id"),
             inverseJoinColumns = @JoinColumn(name = "usuario_id")
     )

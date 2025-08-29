@@ -1,6 +1,7 @@
 package br.com.carro.entities;
 
 import br.com.carro.entities.Usuario.Usuario;
+import com.fasterxml.jackson.annotation.JsonBackReference;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -51,6 +52,7 @@ public class Arquivo {
      */
     @ManyToOne
     @JoinColumn(name = "pasta_id")
+    @JsonBackReference("pasta-arquivos")
     private Pasta pasta;
 
     /**
