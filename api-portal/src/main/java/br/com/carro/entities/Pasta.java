@@ -2,6 +2,7 @@ package br.com.carro.entities;
 
 import br.com.carro.entities.Usuario.Usuario;
 import com.fasterxml.jackson.annotation.JsonBackReference;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
 import lombok.Data;
@@ -39,25 +40,11 @@ public class Pasta {
     @Column(name = "caminho_completo", nullable = false)
     private String caminhoCompleto;
 
-    /**
-     * Relacionamento muitos-para-um com o Setor.
-     * Este campo define a qual setor uma pasta principal pertence.
-     * Será nulo para subpastas.
-     */
-    // ✅ Adicione @JsonManagedReference para gerenciar a serialização
-    @ManyToOne(fetch = FetchType.EAGER)
-    @JoinColumn(name = "setor_id")
-    @JsonManagedReference("setor-pastasPrincipais")
-    private Setor setor;
-
-    /**
-     * Relacionamento de auto-referência para criar a hierarquia.
-     * A 'pastaPai' aponta para a pasta acima dela na árvore.
-     */
-    // ✅ Adicione @JsonManagedReference para o relacionamento de auto-referência
-    @ManyToOne(fetch = FetchType.EAGER)
+    // ✅ Vínculo com a pasta pai, para subpastas.
+    // Pastas com pastaPai = null são consideradas "pastas principais".
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "pasta_pai_id")
-    @JsonManagedReference("pasta-subpastas")
+    @JsonBackReference("pasta-subpastas")
     private Pasta pastaPai;
 
     /**
@@ -66,8 +53,8 @@ public class Pasta {
      */
     // ✅ Adicione @JsonBackReference para evitar a recursão infinita
     @OneToMany(mappedBy = "pastaPai", cascade = CascadeType.ALL, orphanRemoval = true)
-    @JsonBackReference("pasta-subpastas")
-    private List<Pasta> subpastas;
+    @JsonManagedReference("pasta-subpastas")
+    private Set<Pasta> subpastas;
 
     /**
      * Lista de arquivos contidos nesta pasta.
@@ -75,8 +62,8 @@ public class Pasta {
      */
     // ✅ Adicione @JsonBackReference para a lista de arquivos
     @OneToMany(mappedBy = "pasta", cascade = CascadeType.ALL, orphanRemoval = true)
-    @JsonBackReference("pasta-arquivos")
-    private List<Arquivo> arquivos;
+    @JsonManagedReference("pasta-arquivos")
+    private Set<Arquivo> arquivos;
 
     /**
      * Data e hora de criação da pasta.
@@ -88,11 +75,12 @@ public class Pasta {
      * Relacionamento muitos-para-muitos para permissões especiais.
      * Permite que usuários de outros setores acessem esta pasta, se necessário.
      */
-    @ManyToMany
+    @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "tb_permissao_pasta",
             joinColumns = @JoinColumn(name = "pasta_id"),
             inverseJoinColumns = @JoinColumn(name = "usuario_id")
     )
+    @JsonIgnore
     private Set<Usuario> usuariosComPermissao;
 }

@@ -19,9 +19,11 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.net.MalformedURLException;
+import java.nio.file.AccessDeniedException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/api/arquivos")
@@ -38,7 +40,7 @@ public class ArquivoController {
 
     /**
      * Endpoint para upload de arquivos para uma pasta específica.
-     * Requer permissão de 'ADMIN' ou 'GERENTE'.
+     * Agora passa o usuário logado para o serviço.
      */
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
@@ -49,6 +51,7 @@ public class ArquivoController {
     ) {
         try {
             Usuario usuarioLogado = (Usuario) userDetailsService.loadUserByUsername(jwt.getSubject());
+            // ✅ Agora passa o usuário para o serviço
             Arquivo arquivoSalvo = arquivoService.salvarArquivo(file, pastaId, usuarioLogado);
             return ResponseEntity.status(HttpStatus.CREATED).body(arquivoSalvo);
         } catch (IOException e) {
@@ -61,28 +64,39 @@ public class ArquivoController {
 
     /**
      * Lista todos os arquivos dentro de uma pasta específica.
-     * Requer permissão de 'ADMIN', 'GERENTE' ou 'BASIC'.
+     * Agora passa o usuário logado para o serviço para a verificação de permissão.
      */
     @GetMapping("/pasta/{pastaId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE', 'BASIC')")
-    public ResponseEntity<List<Arquivo>> listarArquivosPorPasta(@PathVariable Long pastaId) {
+    public ResponseEntity<List<Arquivo>> listarArquivosPorPasta(
+            @PathVariable Long pastaId,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
         try {
-            List<Arquivo> arquivos = arquivoService.listarArquivosPorPasta(pastaId);
+            Usuario usuarioLogado = (Usuario) userDetailsService.loadUserByUsername(jwt.getSubject());
+            // ✅ Agora passa o usuário para o serviço
+            List<Arquivo> arquivos = arquivoService.listarArquivosPorPasta(pastaId, usuarioLogado);
             return ResponseEntity.ok(arquivos);
-        } catch (EntityNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+        } catch (EntityNotFoundException | AccessDeniedException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
     }
 
     /**
      * Endpoint para download de um arquivo pelo seu ID.
-     * Requer permissão de 'ADMIN', 'GERENTE' ou 'BASIC'.
+     * Agora passa o usuário logado para o serviço para a verificação de permissão.
      */
     @GetMapping("/download/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE', 'BASIC')")
-    public ResponseEntity<Resource> downloadArquivo(@PathVariable Long id) {
+    public ResponseEntity<Resource> downloadArquivo(
+            @PathVariable Long id,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
         try {
-            Arquivo arquivo = arquivoService.buscarPorId(id);
+            Usuario usuarioLogado = (Usuario) userDetailsService.loadUserByUsername(jwt.getSubject());
+            // ✅ Usa o novo método do serviço que já inclui a verificação
+            Arquivo arquivo = arquivoService.buscarPorId(id, usuarioLogado);
+
             Path filePath = Paths.get(arquivo.getCaminhoArmazenamento());
             Resource resource = new UrlResource(filePath.toUri());
 
@@ -95,23 +109,28 @@ public class ArquivoController {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
             }
         } catch (EntityNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-        } catch (MalformedURLException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        } catch (MalformedURLException | AccessDeniedException e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 
     /**
      * Exclui um arquivo pelo seu ID.
-     * Requer permissão de 'ADMIN' ou 'GERENTE'.
+     * Agora passa o usuário logado para o serviço para a verificação de permissão.
      */
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
-    public ResponseEntity<String> excluirArquivo(@PathVariable Long id) {
+    public ResponseEntity<String> excluirArquivo(
+            @PathVariable Long id,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
         try {
-            arquivoService.excluirArquivo(id);
+            Usuario usuarioLogado = (Usuario) userDetailsService.loadUserByUsername(jwt.getSubject());
+            // ✅ Agora passa o usuário para o serviço
+            arquivoService.excluirArquivo(id, usuarioLogado);
             return ResponseEntity.ok("Arquivo com ID " + id + " excluído com sucesso.");
-        } catch (EntityNotFoundException e) {
+        } catch (EntityNotFoundException | AccessDeniedException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
         }
     }

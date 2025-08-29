@@ -1,8 +1,9 @@
 package br.com.carro.services;
 
+import br.com.carro.entities.DTO.PastaRequestDTO;
 import br.com.carro.entities.Pasta;
+import br.com.carro.entities.Usuario.Usuario;
 import br.com.carro.repositories.PastaRepository;
-import br.com.carro.repositories.SetorRepository;
 import br.com.carro.repositories.UsuarioRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,44 +12,40 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class PastaService {
 
     private final PastaRepository pastaRepository;
-    private final SetorRepository setorRepository;
     private final UsuarioRepository usuarioRepository;
 
     @Autowired
-    public PastaService(PastaRepository pastaRepository, SetorRepository setorRepository, UsuarioRepository usuarioRepository) {
+    public PastaService(PastaRepository pastaRepository, UsuarioRepository usuarioRepository) {
         this.pastaRepository = pastaRepository;
-        this.setorRepository = setorRepository;
         this.usuarioRepository = usuarioRepository;
     }
 
     /**
-     * Lista pastas principais (raiz) de acordo com a role do usuário.
-     * ADMIN vê todas as pastas principais. Outros usuários vêem apenas as do seu setor.
-     * @param setorId O ID do setor do usuário logado. Pode ser nulo para ADMIN.
-     * @param isAdmin Verdadeiro se o usuário logado for ADMIN.
-     * @param pageable Objeto de paginação e ordenação.
-     * @return Uma página de objetos Pasta.
+     * Lista as pastas principais de acordo com o tipo de usuário.
+     * Administradores veem todas as pastas principais.
+     * Outros usuários veem apenas as pastas principais às quais têm acesso.
      */
-    public Page<Pasta> listarPastasPrincipais(Long setorId, boolean isAdmin, Pageable pageable) {
+    public Page<Pasta> listarPastasPrincipais(boolean isAdmin, Usuario usuario, Pageable pageable) {
         if (isAdmin) {
-            // Se for ADMIN, ele pode ver todas as pastas principais de todos os setores.
             return pastaRepository.findByPastaPaiIsNull(pageable);
         } else {
-            // Para outros usuários, a busca é restrita ao setor.
-            if (setorId == null) {
-                throw new IllegalArgumentException("Usuário sem setor definido.");
-            }
-            if (!setorRepository.existsById(setorId)) {
-                throw new EntityNotFoundException("Setor não encontrado com o ID: " + setorId);
-            }
-            return pastaRepository.findBySetorIdAndPastaPaiIsNull(setorId, pageable);
+            // ✅ CORREÇÃO: Extrair os IDs antes de chamar o repositório
+            Set<Long> pastasIds = usuario.getPastasPrincipaisAcessadas().stream()
+                    .map(Pasta::getId) // Mapeia cada Pasta para seu ID
+                    .collect(Collectors.toSet());
+
+            return pastaRepository.findAllByIdIn(pastasIds, pageable);
         }
     }
+
 
     /**
      * Lista as subpastas de uma pasta pai específica.
@@ -73,37 +70,32 @@ public class PastaService {
     }
 
     /**
-     * Cria uma nova pasta com validações de relacionamentos.
-     * @param pasta O objeto Pasta a ser criado.
-     * @return A pasta criada.
+     * Cria uma pasta a partir de um DTO.
+     * A lógica agora diferencia apenas entre pastas principais e subpastas.
      */
-    public Pasta criarPasta(Pasta pasta) {
-        if (pasta.getNomePasta() == null || pasta.getNomePasta().isBlank()) {
-            throw new IllegalArgumentException("O nome da pasta não pode ser vazio.");
+    public Pasta criarPastaFromDto(PastaRequestDTO pastaDTO) {
+        Pasta novaPasta = new Pasta();
+        novaPasta.setNomePasta(pastaDTO.getNomePasta());
+        novaPasta.setCaminhoCompleto(pastaDTO.getCaminhoCompleto());
+        novaPasta.setDataCriacao(LocalDateTime.now());
+
+        // Se pastaPaiId é nulo, é uma pasta principal.
+        if (pastaDTO.getPastaPaiId() != null) {
+            Pasta pastaPai = pastaRepository.findById(pastaDTO.getPastaPaiId())
+                    .orElseThrow(() -> new EntityNotFoundException("Pasta pai não encontrada."));
+            novaPasta.setPastaPai(pastaPai);
         }
 
-        if (pasta.getPastaPai() != null && pasta.getPastaPai().getId() != null) {
-            pastaRepository.findById(pasta.getPastaPai().getId())
-                    .orElseThrow(() -> new EntityNotFoundException("A pasta pai informada não existe."));
-        } else {
-            if (pasta.getSetor() == null || pasta.getSetor().getId() == null) {
-                throw new IllegalArgumentException("Uma pasta principal deve ser associada a um setor válido.");
-            }
-            setorRepository.findById(pasta.getSetor().getId())
-                    .orElseThrow(() -> new EntityNotFoundException("O setor informado não existe."));
+        // ✅ Permissões para a pasta
+        Set<Usuario> usuariosPermitidos = new HashSet<>();
+        if (pastaDTO.getUsuariosComPermissaoIds() != null) {
+            usuariosPermitidos.addAll(usuarioRepository.findAllById(pastaDTO.getUsuariosComPermissaoIds()));
         }
+        novaPasta.setUsuariosComPermissao(usuariosPermitidos);
 
-        if (pasta.getUsuariosComPermissao() != null && !pasta.getUsuariosComPermissao().isEmpty()) {
-            pasta.getUsuariosComPermissao().forEach(usuario -> {
-                if (!usuarioRepository.existsById(usuario.getId())) {
-                    throw new EntityNotFoundException("Usuário com ID " + usuario.getId() + " para permissão não encontrado.");
-                }
-            });
-        }
-
-        pasta.setDataCriacao(LocalDateTime.now());
-        return pastaRepository.save(pasta);
+        return pastaRepository.save(novaPasta);
     }
+
 
     /**
      * Atualiza uma pasta existente.

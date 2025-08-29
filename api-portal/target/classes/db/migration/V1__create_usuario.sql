@@ -4,20 +4,12 @@ CREATE TABLE IF NOT EXISTS tb_roles (
     nome VARCHAR(255) NOT NULL
 );
 
--- Tabela de Setores
-CREATE TABLE IF NOT EXISTS tb_setor (
-                                   id BIGINT AUTO_INCREMENT PRIMARY KEY,
-                                   nome VARCHAR(255) NOT NULL UNIQUE
-);
-
 -- Criação da tabela de usuários
 CREATE TABLE IF NOT EXISTS tb_usuarios (
    id BIGINT AUTO_INCREMENT PRIMARY KEY,
    username VARCHAR(255) NOT NULL UNIQUE,
    password VARCHAR(255) NOT NULL,
-    senha_provisoria BOOLEAN NOT NULL DEFAULT FALSE,
-    setor_id BIGINT NOT NULL,
-    CONSTRAINT fk_usuarios_setores FOREIGN KEY (setor_id) REFERENCES tb_setor (id)
+    senha_provisoria BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 -- Criação da tabela de relacionamento entre usuários e roles
@@ -35,9 +27,7 @@ CREATE TABLE IF NOT EXISTS tb_pasta (
   nome_pasta VARCHAR(255) NOT NULL,
     caminho_completo VARCHAR(255) NOT NULL,
     data_criacao DATETIME(6) NOT NULL,
-    setor_id BIGINT,
     pasta_pai_id BIGINT,
-    CONSTRAINT fk_pastas_setores FOREIGN KEY (setor_id) REFERENCES tb_setor (id),
     CONSTRAINT fk_subpastas_pasta_pai FOREIGN KEY (pasta_pai_id) REFERENCES tb_pasta (id)
 );
 
@@ -54,13 +44,14 @@ CREATE TABLE IF NOT EXISTS tb_arquivo (
     CONSTRAINT fk_arquivos_usuarios FOREIGN KEY (criado_por_id) REFERENCES tb_usuarios (id)
 );
 
--- Associacao com a tabela usuario que permite acesso a determinada pasta
+-- ✅ NOVO: Tabela de relacionamento entre usuários e as pastas principais que eles podem acessar
+-- Renomeada de tb_permissao_pasta para usuario_pasta_principal
 CREATE TABLE tb_permissao_pasta (
-     pasta_id BIGINT NOT NULL,
      usuario_id BIGINT NOT NULL,
-     PRIMARY KEY (pasta_id, usuario_id),
-     FOREIGN KEY (pasta_id) REFERENCES tb_pasta(id),
-     FOREIGN KEY (usuario_id) REFERENCES tb_usuarios(id)
+     pasta_id BIGINT NOT NULL,
+     PRIMARY KEY (usuario_id, pasta_id),
+     FOREIGN KEY (usuario_id) REFERENCES tb_usuarios(id),
+     FOREIGN KEY (pasta_id) REFERENCES tb_pasta(id)
 );
 
 
@@ -70,53 +61,43 @@ INSERT INTO tb_roles (nome) VALUES
                                 ('BASIC'),
                                 ('GERENTE');
 
--- Inserir Setor
-INSERT INTO tb_setor (nome) VALUES
-    ('Financeiro'),
-    ('Recursos Humanos'),
-    ('Marketing'),
-    ('TI'),
-    ('Jurídico');
 
 -- Inserção de usuários
-INSERT INTO tb_usuarios (username, password, senha_provisoria,setor_id) VALUES
-                                                                   ('admin', '$2a$12$jQ0dPE2juypEy07pKe1uBOjcUzxJq8lSIb/nM1.pQATbzWvoB0kN2', FALSE,4),  -- senha: senha123
-                                                                   ('gabriel', '$2a$12$jQ0dPE2juypEy07pKe1uBOjcUzxJq8lSIb/nM1.pQATbzWvoB0kN2', TRUE,1),  -- senha: senha456
-                                                                   ('beatriz', '$2a$10$Vt6ldlS92W5N6HF1OS5qfIWdb0P7Zfjdqxq6rzQ3S1CnllXaZRaBu', FALSE,2), -- senha: senha789
-                                                                   ('14329301', '$2a$12$jQ0dPE2juypEy07pKe1uBOjcUzxJq8lSIb/nM1.pQATbzWvoB0kN2', TRUE,3),   -- senha: senha123
-                                                                   ('usuario5', '$2a$10$ADqjEwM1joxBvl0ivQiqK3odF2gGbzRslfvtnwTqfmRbx11P0RHgi', FALSE,2);  -- senha: senha202
+INSERT INTO tb_usuarios (username, password, senha_provisoria) VALUES
+   ('admin', '$2a$12$jQ0dPE2juypEy07pKe1uBOjcUzxJq8lSIb/nM1.pQATbzWvoB0kN2', FALSE),  -- senha: senha123
+   ('gabriel', '$2a$12$jQ0dPE2juypEy07pKe1uBOjcUzxJq8lSIb/nM1.pQATbzWvoB0kN2', TRUE),  -- senha: senha123
+   ('beatriz', '$2a$10$Vt6ldlS92W5N6HF1OS5qfIWdb0P7Zfjdqxq6rzQ3S1CnllXaZRaBu', FALSE), -- senha: senha789
+   ('14329301', '$2a$12$jQ0dPE2juypEy07pKe1uBOjcUzxJq8lSIb/nM1.pQATbzWvoB0kN2', TRUE),   -- senha: senha123
+   ('usuario5', '$2a$10$ADqjEwM1joxBvl0ivQiqK3odF2gGbzRslfvtnwTqfmRbx11P0RHgi', FALSE);  -- senha: senha202
 
 -- Inserção de relacionamento usuário ↔ role
 INSERT INTO tb_usuarios_roles (user_id, role_id) VALUES
-                                                     (1, 1),  -- admin com ADMIN
-                                                     (2, 2),  -- usuario2 com BASIC
-                                                     (3, 3),  -- usuario3 com GERENTE
-                                                     (4, 3),  -- usuario4 com ADMIN
-                                                     (5, 2);  -- usuario5 com BASIC
+     (1, 1),  -- admin com ADMIN
+     (2, 2),  -- usuario2 com BASIC
+     (3, 3),  -- usuario3 com GERENTE
+     (4, 3),  -- usuario4 com ADMIN
+     (5, 2);  -- usuario5 com BASIC
 
 -- As pastas principais estão associadas a um setor.
 -- Pastas filhas (subpastas) terão 'pasta_pai_id' mas 'setor_id' nulo.
-INSERT INTO tb_pasta (nome_pasta, caminho_completo, data_criacao, setor_id, pasta_pai_id) VALUES
-                            ('Relatorios-Financeiros', '/Financeiro/Relatorios-Financeiros', NOW(), 1, NULL),
-                            ('Campanhas-2025', '/Marketing/Campanhas-2025', NOW(), 3, NULL),
-                            ('Docs-RH', '/RH/Docs-RH', NOW(), 2, NULL),
-                            ('Projetos-TI', '/TI/Projetos-TI', NOW(), 4, NULL),
-                            ('Contratos', '/Juridico/Contratos', NOW(), 5, NULL);
+INSERT INTO tb_pasta (nome_pasta, caminho_completo, data_criacao, pasta_pai_id) VALUES
+    ('Relatorios-Financeiros', '/Financeiro/Relatorios-Financeiros', NOW(), NULL),
+    ('Campanhas-2025', '/Marketing/Campanhas-2025', NOW(), NULL),
+    ('Docs-RH', '/RH/Docs-RH', NOW(), NULL),
+    ('Projetos-TI', '/TI/Projetos-TI', NOW(), NULL),
+    ('Contratos', '/Juridico/Contratos', NOW(), NULL);
 
--- 1. Permite que o Usuário 1 (ex: João) acesse a Pasta 1 (ex: Relatórios Financeiros)
-INSERT INTO tb_permissao_pasta (pasta_id, usuario_id) VALUES (1, 1);
-
--- 2. Permite que o Usuário 2 (ex: Maria) acesse a Pasta 1 (ex: Relatórios Financeiros)
-INSERT INTO tb_permissao_pasta (pasta_id, usuario_id) VALUES (1, 2);
-
--- 3. Permite que o Usuário 3 (ex: Carlos) acesse a Pasta 2 (ex: Documentos de Vendas)
-INSERT INTO tb_permissao_pasta (pasta_id, usuario_id) VALUES (2, 3);
-
--- 4. Permite que o Usuário 4 (ex: Ana) acesse a Pasta 3 (ex: Materiais de Marketing)
-INSERT INTO tb_permissao_pasta (pasta_id, usuario_id) VALUES (3, 4);
-
--- 5. O Usuário 1 (ex: João) também tem acesso à Pasta 3
-INSERT INTO tb_permissao_pasta (pasta_id, usuario_id) VALUES (3, 1);
+-- Define quais usuários têm acesso direto a quais pastas principais.
+INSERT INTO tb_permissao_pasta (usuario_id, pasta_id) VALUES
+   (1, 1), -- Admin tem acesso à pasta Financeiro
+   (1, 2), -- Admin tem acesso à pasta Marketing
+   (1, 3), -- Admin tem acesso à pasta RH
+   (1, 4), -- Admin tem acesso à pasta TI
+   (1, 5), -- Admin tem acesso à pasta Jurídico
+   (2, 1), -- Gabriel (BASIC) tem acesso à pasta Financeiro
+   (3, 2), -- Beatriz (GERENTE) tem acesso à pasta Marketing
+   (4, 3), -- Usuario4 (GERENTE) tem acesso à pasta RH
+   (5, 5); -- Usuario5 (BASIC) tem acesso à pasta Jurídico
 
 -- Cada arquivo está associado a uma pasta e a um usuário que o criou.
 -- Caminho de armazenamento é apenas um exemplo.

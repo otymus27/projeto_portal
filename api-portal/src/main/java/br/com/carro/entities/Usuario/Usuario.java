@@ -1,7 +1,8 @@
 package br.com.carro.entities.Usuario;
 
+import br.com.carro.entities.Pasta;
 import br.com.carro.entities.Role.Role;
-import br.com.carro.entities.Setor;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -9,6 +10,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.Set;
 
 /**
@@ -37,13 +39,16 @@ public class Usuario implements UserDetails {
     @Column(nullable = false)
     private boolean senhaProvisoria = false;
 
-    /**
-     * Relacionamento muitos-para-um. Muitos usuários pertencem a um Setor.
-     * A coluna 'setor_id' será a chave estrangeira na tabela 'usuarios'.
-     */
-    @ManyToOne(fetch = FetchType.EAGER)
-    @JoinColumn(name = "setor_id", nullable = false)
-    private Setor setor;
+    // ✅ Novo relacionamento: usuários acessam pastas principais diretamente
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "tb_permissao_pasta",
+            joinColumns = @JoinColumn(name = "usuario_id"),
+            inverseJoinColumns = @JoinColumn(name = "pasta_id")
+    )
+    @JsonIgnore
+    private Set<Pasta> pastasPrincipaisAcessadas = new HashSet<>();
+
 
     @ManyToMany(fetch = FetchType.EAGER) // ✅ FetchType.EAGER para carregar as permissões imediatamente
     @JoinTable(

@@ -1,6 +1,7 @@
 package br.com.carro.services;
 
 import br.com.carro.entities.Carro;
+import br.com.carro.entities.Pasta;
 import br.com.carro.entities.Role.Role;
 import br.com.carro.entities.Role.RoleDto;
 import br.com.carro.entities.Usuario.Usuario;
@@ -103,11 +104,16 @@ public class UsuarioService {
                     .map(role -> new RoleDto(role.getId(), role.getNome()))
                     .collect(Collectors.toSet());
 
+            // ✅ LÓGICA ATUALIZADA: Obtém os IDs das pastas principais
+            Set<Long> pastasIds = usuario.getPastasPrincipaisAcessadas().stream()
+                    .map(Pasta::getId)
+                    .collect(Collectors.toSet());
+
             // ✅ AQUI ESTÁ A MUDANÇA: adicionando o ID do setor no DTO
             return new UsuarioDto(
                     usuario.getId(),
                     usuario.getUsername(),
-                    usuario.getSetor() != null ? usuario.getSetor().getId() : null, // Proteção contra NullPointerException
+                    pastasIds,
                     rolesDto
             );
         }
@@ -124,7 +130,6 @@ public class UsuarioService {
     public Page<Usuario> buscarPorNome(String username, Pageable pageable) {
         return usuarioRepository.findByUsernameContainingIgnoreCase(username,pageable);
     }
-
 
 
 

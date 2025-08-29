@@ -8,9 +8,9 @@ import java.util.Set;
 @Validated
 public record UsuarioCadastroDto(
         @NotBlank
-        String login,
+        String username,
         @NotBlank
-        String senha,
+        String password,
         Set<Long> roleIds
 ) {
 }

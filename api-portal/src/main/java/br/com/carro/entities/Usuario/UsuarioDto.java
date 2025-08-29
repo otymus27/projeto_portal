@@ -9,6 +9,6 @@ import java.util.Set;
 public record UsuarioDto(
         Long id,
         String username,
-        Long setorId,
+        Set<Long> pastasPrincipaisAcessadasIds, // ✅ Novo campo
         Set<RoleDto> roles
 ) {}

@@ -1,9 +1,11 @@
 package br.com.carro.controllers;
 
 import br.com.carro.autenticacao.JpaUserDetailsService;
+import br.com.carro.entities.DTO.PastaRequestDTO;
 import br.com.carro.entities.Pasta;
 import br.com.carro.entities.Usuario.Usuario;
 import br.com.carro.services.PastaService;
+import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -62,13 +64,13 @@ public class PastaController {
         Pageable pageable = PageRequest.of(page, size, sortObj);
 
         // ✅ Lógica de verificação do papel (role) do usuário
-        boolean isAdmin = usuarioLogado.getRoles().stream().anyMatch(r -> r.getNome().equals("ROLE_ADMIN"));
+        boolean isAdmin = usuarioLogado.getRoles().stream().anyMatch(r -> r.getNome().equals("ADMIN"));
 
         // ✅ A chamada ao serviço agora passa a informação sobre o papel
         // O Service decide qual método do Repositorio chamar com base nesta flag.
         Page<Pasta> pastas = pastaService.listarPastasPrincipais(
-                isAdmin ? null : usuarioLogado.getSetor().getId(),
                 isAdmin,
+                usuarioLogado,
                 pageable
         );
 
@@ -117,15 +119,12 @@ public class PastaController {
      */
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<?> criarPasta(@RequestBody Pasta pasta) {
+    public ResponseEntity<?> criarPasta(@RequestBody PastaRequestDTO pastaDTO) {
         try {
-            Pasta novaPasta = this.pastaService.criarPasta(pasta);
+            Pasta novaPasta = this.pastaService.criarPastaFromDto(pastaDTO);
             return ResponseEntity.status(HttpStatus.CREATED).body(novaPasta);
-        } catch (IllegalArgumentException | jakarta.persistence.EntityNotFoundException e) {
+        } catch (IllegalArgumentException | EntityNotFoundException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Erro ao criar a pasta: " + e.getMessage());
         }
     }
 
