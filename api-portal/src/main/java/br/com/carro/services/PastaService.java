@@ -141,6 +141,7 @@ public class PastaService {
         pastaRepository.delete(pasta);
     }
 
+    // --- EXCLUSÃO ----
 
     /**
      * ✅ NOVO MÉTODO: Exclui uma pasta por ID, incluindo o conteúdo físico e do banco.
@@ -342,8 +343,6 @@ public class PastaService {
             adicionarPastaAoZip(subpasta, zipOut, nomeEntrada);
         }
     }
-
-
 
     // Método auxiliar para deletar somente o conteúdo da pasta, não a pasta em si.
     private void deletarConteudoPasta(Pasta pasta) {

@@ -235,13 +235,15 @@ public class PastaController {
     /**
      * ✅ NOVO ENDPOINT: Substitui o conteúdo de uma pasta existente.
      */
-    @PutMapping(value = "/substituir/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PostMapping(value = "/substituir/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
     public ResponseEntity<String> substituirPasta(
             @PathVariable("id") Long pastaId,
             @RequestParam("files") MultipartFile[] files,
             @AuthenticationPrincipal Jwt jwt) {
         try {
+            System.out.println("Fui chamado substituir");
+            testeDelecao();
             Usuario usuarioLogado = (Usuario) userDetailsService.loadUserByUsername(jwt.getSubject());
             pastaService.substituirPasta(pastaId, files, usuarioLogado);
             return ResponseEntity.ok("Conteúdo da pasta substituído com sucesso!");
