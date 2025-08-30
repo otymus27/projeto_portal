@@ -30,11 +30,16 @@ import java.util.stream.Collectors;
 @Service
 public class ArquivoService {
 
+    // ✅ Variável que será injetada com o caminho do application.properties
+    @Value("${app.file.upload-dir}")
+    private String uploadDir;
+
     private final ArquivoRepository arquivoRepository;
     private final PastaRepository pastaRepository;
     private final UsuarioService usuarioService; // Usar o UsuarioService para buscar o usuário
-   // private final String uploadDir = "caminho/para/seus/arquivos"; // ✅ ATENÇÃO: Configure este caminho!
-    private final Path fileStorageLocation = Paths.get("uploads").toAbsolutePath();
+
+   // private final Path fileStorageLocation = Paths.get("uploads").toAbsolutePath();
+
 
     @Autowired
     public ArquivoService(ArquivoRepository arquivoRepository, PastaRepository pastaRepository, UsuarioService usuarioService) {
@@ -43,40 +48,10 @@ public class ArquivoService {
         this.usuarioService = usuarioService;
     }
 
-    // ✅ O método agora retorna um ArquivoDTO
+    // ✅ Método público para upload de UM único arquivo
+    @Transactional
     public ArquivoDTO uploadArquivo(MultipartFile file, Long pastaId, Usuario usuario) throws IOException {
-        Pasta pasta = pastaRepository.findById(pastaId)
-                .orElseThrow(() -> new EntityNotFoundException("Pasta não encontrada com o ID: " + pastaId));
-
-        if (!checarAcessoPasta(pasta, usuario)) {
-            throw new AccessDeniedException("Você não tem permissão para adicionar arquivos nesta pasta.");
-        }
-
-        // Use o caminho da pasta para construir o diretório
-        Path pastaPath = Paths.get(pasta.getCaminhoCompleto()).toAbsolutePath().normalize();
-
-        // Crie o diretório se ele não existir
-        Files.createDirectories(pastaPath);
-
-        String nomeArquivoUnico = UUID.randomUUID().toString() + "_" + StringUtils.cleanPath(file.getOriginalFilename());
-
-        // Constrói o caminho completo do arquivo
-        Path targetLocation = pastaPath.resolve(nomeArquivoUnico);
-
-        // Salva o arquivo no disco
-        Files.copy(file.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);
-
-        // Cria a entidade Arquivo no banco de dados
-        Arquivo arquivo = new Arquivo();
-        arquivo.setNomeArquivo(file.getOriginalFilename());
-        arquivo.setCaminhoArmazenamento(targetLocation.toString());
-        arquivo.setTamanhoBytes(file.getSize());
-        arquivo.setDataUpload(LocalDateTime.now());
-        arquivo.setPasta(pasta);
-        arquivo.setCriadoPor(usuario);
-
-        // ✅ Converte a entidade salva em DTO antes de retornar
-        Arquivo arquivoSalvo = arquivoRepository.save(arquivo);
+        Arquivo arquivoSalvo = salvarArquivoUnico(file, pastaId, usuario);
         return ArquivoDTO.fromEntity(arquivoSalvo);
     }
 
@@ -120,7 +95,7 @@ public class ArquivoService {
     }
 
     // ✅ O método agora recebe o usuário como argumento
-    public void excluirArquivo(Long id, Usuario usuario) throws AccessDeniedException {
+    public void excluirArquivo(Long id, Usuario usuario) throws IOException {
         Arquivo arquivo = arquivoRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Arquivo não encontrado com o ID: " + id));
 
@@ -128,10 +103,13 @@ public class ArquivoService {
             throw new AccessDeniedException("Você não tem permissão para excluir este arquivo.");
         }
 
-        File arquivoFisico = new File(arquivo.getCaminhoArmazenamento());
-        if (arquivoFisico.exists()) {
-            arquivoFisico.delete();
-        }
+        Path caminhoCompletoArquivo = Paths.get(arquivo.getCaminhoArmazenamento());
+
+        // ✅ LINHA DE DIAGNÓSTICO
+        System.out.println("Caminho do arquivo a ser excluído: " + caminhoCompletoArquivo.toAbsolutePath().normalize().toString());
+
+        // Usa a API Files para deletar o arquivo físico de forma segura
+        Files.deleteIfExists(caminhoCompletoArquivo);
 
         arquivoRepository.delete(arquivo);
     }
@@ -276,13 +254,15 @@ public class ArquivoService {
         Path pastaPath = Paths.get(pasta.getCaminhoCompleto()).toAbsolutePath().normalize();
         Files.createDirectories(pastaPath);
 
-        String nomeArquivoUnico = UUID.randomUUID().toString() + "_" + StringUtils.cleanPath(file.getOriginalFilename());
+        String nomeDoArquivo = Paths.get(file.getOriginalFilename()).getFileName().toString();
+        String nomeArquivoUnico = UUID.randomUUID().toString() + "_" + StringUtils.cleanPath(nomeDoArquivo);
+
         Path targetLocation = pastaPath.resolve(nomeArquivoUnico);
         Files.copy(file.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);
 
         Arquivo arquivo = new Arquivo();
-        arquivo.setNomeArquivo(file.getOriginalFilename());
-        arquivo.setCaminhoArmazenamento(targetLocation.toString());
+        arquivo.setNomeArquivo(nomeArquivoUnico); // ✅ Salve o nome único aqui para evitar problemas de caractere
+        arquivo.setCaminhoArmazenamento(targetLocation.toString()); // Salva o caminho ABSOLUTO
         arquivo.setTamanhoBytes(file.getSize());
         arquivo.setDataUpload(LocalDateTime.now());
         arquivo.setPasta(pasta);

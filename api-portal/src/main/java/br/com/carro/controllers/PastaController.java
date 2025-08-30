@@ -11,16 +11,27 @@ import jakarta.transaction.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/pasta")
@@ -103,6 +114,28 @@ public class PastaController {
     }
 
     /**
+     * ✅ NOVO ENDPOINT: Faz o upload de uma estrutura de pastas e arquivos.
+     */
+    @PostMapping(value = "/upload-diretorio", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
+    public ResponseEntity<String> uploadDiretorio(
+            @RequestParam("files") MultipartFile[] files,
+            @RequestParam("pastaId") Long pastaPaiId,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        try {
+            Usuario usuarioLogado = (Usuario) userDetailsService.loadUserByUsername(jwt.getSubject());
+            pastaService.criarSubpastasEArquivos(files, pastaPaiId, usuarioLogado);
+            return ResponseEntity.ok("Diretório e arquivos enviados com sucesso!");
+        } catch (IOException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Erro ao processar o upload: " + e.getMessage());
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+        }
+    }
+
+    /**
      * Atualiza uma pasta existente.
      * Acesso restrito a 'ADMIN'.
      */
@@ -131,5 +164,106 @@ public class PastaController {
         } catch (Exception e) {
             return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
         }
+    }
+
+
+
+    /**
+     * ✅ NOVO ENDPOINT: Exclui uma pasta por ID, incluindo todos os seus arquivos.
+     * Exemplo: DELETE http://localhost:8082/api/pasta/excluir/1
+     */
+    @DeleteMapping("/excluir/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
+    public ResponseEntity<String> excluirPasta(@PathVariable("id") Long id) {
+        try {
+            pastaService.excluirPasta(id);
+            return ResponseEntity.ok("Pasta e seu conteúdo excluídos com sucesso!");
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Erro ao excluir a pasta: " + e.getMessage());
+        }
+    }
+
+
+
+    /**
+     * Endpoint que busca pastas por nome com paginação e ordenação.
+     * Exemplo de requisição: GET http://localhost:8082/api/pasta/buscar?nome=relatorio&page=0&size=10&sort=nomePasta,asc
+     * @param nome O termo de busca.
+     * @param pageable Objeto Pageable injetado automaticamente pelo Spring.
+     * @return Uma página de PastaDTOs.
+     */
+    @GetMapping("/buscar")
+    @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
+    public ResponseEntity<Page<PastaDTO>> buscarPastasPorNome(
+            @RequestParam("nome") String nome,
+            @PageableDefault(page = 0, size = 10, sort = "dataCriacao", direction = org.springframework.data.domain.Sort.Direction.DESC) Pageable pageable
+    ) {
+        Page<PastaDTO> pastasEncontradas = pastaService.buscarPastasPorNome(nome, pageable);
+        return ResponseEntity.ok(pastasEncontradas);
+    }
+
+
+    /**
+     * ✅ NOVO ENDPOINT: Faz o download de uma pasta inteira em formato ZIP.
+     */
+    @GetMapping("/download/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
+    public ResponseEntity<Resource> downloadPasta(@PathVariable Long id) {
+        Path tempZipFile = null;
+        try {
+            tempZipFile = pastaService.downloadPasta(id);
+            Resource resource = new UrlResource(tempZipFile.toUri());
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + tempZipFile.getFileName().toString() + "\"");
+            headers.add(HttpHeaders.CONTENT_TYPE, "application/zip");
+
+            return ResponseEntity.ok()
+                    .headers(headers)
+                    .body(resource);
+
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.notFound().build();
+        } catch (IOException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    /**
+     * ✅ NOVO ENDPOINT: Substitui o conteúdo de uma pasta existente.
+     */
+    @PutMapping(value = "/substituir/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
+    public ResponseEntity<String> substituirPasta(
+            @PathVariable("id") Long pastaId,
+            @RequestParam("files") MultipartFile[] files,
+            @AuthenticationPrincipal Jwt jwt) {
+        try {
+            Usuario usuarioLogado = (Usuario) userDetailsService.loadUserByUsername(jwt.getSubject());
+            pastaService.substituirPasta(pastaId, files, usuarioLogado);
+            return ResponseEntity.ok("Conteúdo da pasta substituído com sucesso!");
+        } catch (IOException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Erro ao processar a substituição: " + e.getMessage());
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+        }
+    }
+
+
+    //Métodos para testes apagar depois
+    /**
+     * ✅ NOVO ENDPOINT: Roda o teste de deleção de arquivo.
+     * Use para diagnosticar problemas de caminho.
+     * GET http://localhost:8082/api/pasta/teste-delecao
+     */
+    @GetMapping("/teste-delecao")
+    @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
+    public ResponseEntity<String> testeDelecao() {
+        pastaService.testarCaminhoDelecao();
+        return ResponseEntity.ok("Teste de deleção executado. Verifique o console.");
     }
 }

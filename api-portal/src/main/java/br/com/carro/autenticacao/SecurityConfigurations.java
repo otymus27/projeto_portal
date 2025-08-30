@@ -1,6 +1,7 @@
 package br.com.carro.autenticacao;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Base64;
 
 import javax.crypto.SecretKey;
@@ -94,6 +95,11 @@ public class SecurityConfigurations {
         // Usado para só desenvolvimento
         configuration.addAllowedOrigin("http://localhost:4200");  // ou http://localhost
         configuration.addAllowedOrigin("http://localhost");  // ou http://localhost
+
+
+         // ✅ CORREÇÃO: Liste explicitamente as origens permitidas depois tem que apagar
+         // Inclui a sua aplicação local e "null" para o acesso via arquivo HTML
+         configuration.setAllowedOrigins(Arrays.asList("http://localhost:8082", "null"));
         
         
         // Usado para produção
@@ -129,6 +135,7 @@ public class SecurityConfigurations {
 
             return http.build();
     }
+
 
     // ✅ BEAN ATUALIZADO: Configura como as autoridades são extraídas do JWT para Spring Security 6.x+
     @Bean

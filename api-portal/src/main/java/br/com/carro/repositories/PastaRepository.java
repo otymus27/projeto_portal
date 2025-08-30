@@ -5,6 +5,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
@@ -24,4 +26,10 @@ public interface PastaRepository extends JpaRepository<Pasta, Long> {
 
     // ✅ Método para buscar pastas principais por permissão
     Page<Pasta> findAllByIdIn(Set<Long> pastasPrincipaisAcessadas, Pageable pageable);
+
+    Optional<Pasta> findByNomePastaAndPastaPai(String nomePasta, Pasta pastaPai);
+
+    // Método para buscar arquivos pelo nome (ou parte dele)
+    Page<Pasta> findByNomePastaContainingIgnoreCase(String nomePasta, Pageable pageable);
+
 }

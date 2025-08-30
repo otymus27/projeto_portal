@@ -52,7 +52,7 @@ public class ArquivoController {
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
     public ResponseEntity<?> uploadArquivo(
-            @RequestParam("file") MultipartFile file,
+            @RequestParam("files") MultipartFile file,
             @RequestParam("pastaId") Long pastaId,
             @AuthenticationPrincipal Jwt jwt
     ) {
@@ -191,7 +191,7 @@ public class ArquivoController {
             // ✅ Agora passa o usuário para o serviço
             arquivoService.excluirArquivo(id, usuarioLogado);
             return ResponseEntity.ok("Arquivo com ID " + id + " excluído com sucesso.");
-        } catch (EntityNotFoundException | AccessDeniedException e) {
+        } catch (EntityNotFoundException | IOException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
         }
     }
