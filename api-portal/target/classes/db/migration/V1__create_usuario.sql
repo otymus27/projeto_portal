@@ -87,6 +87,60 @@ INSERT INTO tb_pasta (nome_pasta, caminho_completo, data_criacao, pasta_pai_id) 
     ('Projetos-TI', '/TI/Projetos-TI', NOW(), NULL),
     ('Contratos', '/Juridico/Contratos', NOW(), NULL);
 
+-- =========================
+-- SUBPASTAS
+-- =========================
+-- Subpastas para "Relatorios-Financeiros" (id = 1)
+INSERT INTO tb_pasta (nome_pasta, caminho_completo, data_criacao, pasta_pai_id) VALUES
+    ('Relatorio de Vendas - 2024', '/Financeiro/Relatorios-Financeiros/Relatorio de Vendas', NOW(), 1),
+    ('Relatorios Mensais', '/Financeiro/Relatorios-Financeiros/Relatorios Mensais', NOW(), 1),
+    ('Relatorios Anuais', '/Financeiro/Relatorios-Financeiros/Relatorios Anuais', NOW(), 1);
+
+
+-- Subpastas para "Projetos-TI" (id = 4)
+INSERT INTO tb_pasta (nome_pasta, caminho_completo, data_criacao, pasta_pai_id) VALUES
+    ('Relatorios', '/TI/Projetos-TI/Relatorios', NOW(), 4),
+    ('Documentacao', '/TI/Projetos-TI/Documentacao', NOW(), 4),
+    ('Backups', '/TI/Projetos-TI/Backups', NOW(), 4);
+
+-- Subpastas para "Docs-RH" (id = 3)
+INSERT INTO tb_pasta (nome_pasta, caminho_completo, data_criacao, pasta_pai_id) VALUES
+    ('Manuais', '/RH/Docs-RH/Manuais', NOW(), 3),
+    ('Procedimentos', '/RH/Docs-RH/Procedimentos', NOW(), 3),
+    ('Formularios', '/RH/Docs-RH/Formularios', NOW(), 3);
+
+-- =========================
+-- ARQUIVOS NAS PASTAS PRINCIPAIS
+-- =========================
+INSERT INTO tb_arquivo (nome_arquivo, caminho_armazenamento, tamanho_bytes, data_upload, pasta_id, criado_por_id) VALUES
+  ('Relatorio_de_Vendas.pdf', '/caminho/servidor/vendas.pdf', 10240, NOW(), 1, 2),
+  ('Plano_de_Midia.pdf', '/caminho/servidor/midia.pdf', 5120, NOW(), 2, 4),
+  ('Manual_do_Funcionario.pdf', '/caminho/servidor/manual.pdf', 8192, NOW(), 3, 3),
+  ('Especificacoes_Sistema.pdf', '/caminho/servidor/specs.pdf', 20480, NOW(), 4, 1),
+  ('Minuta_de_Acordo.pdf', '/caminho/servidor/acordo.pdf', 4096, NOW(), 5, 5);
+
+-- =========================
+-- ARQUIVOS NAS SUBPASTAS
+-- =========================
+-- Subpastas de "Relatorios-Financeiros"
+INSERT INTO tb_arquivo (nome_arquivo, caminho_armazenamento, tamanho_bytes, data_upload, pasta_id, criado_por_id) VALUES
+                                                                                                                      ('Vendas_Jan2024.pdf', '/caminho/servidor/vendas_jan.pdf', 2048, NOW(), 6, 2),
+                                                                                                                      ('Vendas_Fev2024.pdf', '/caminho/servidor/vendas_fev.pdf', 2048, NOW(), 7, 2),
+                                                                                                                      ('Vendas_Mar2024.pdf', '/caminho/servidor/vendas_mar.pdf', 2048, NOW(), 8, 2);
+
+-- Subpastas de "Projetos-TI"
+INSERT INTO tb_arquivo (nome_arquivo, caminho_armazenamento, tamanho_bytes, data_upload, pasta_id, criado_por_id) VALUES
+                                                                                                                      ('Relatorio_Teste.pdf', '/caminho/servidor/relatorio_teste.pdf', 1024, NOW(), 9, 1),
+                                                                                                                      ('Documentacao_API.pdf', '/caminho/servidor/doc_api.pdf', 5120, NOW(), 10, 1),
+                                                                                                                      ('Backup_DB.zip', '/caminho/servidor/backup_db.zip', 102400, NOW(), 11, 1);
+
+-- Subpastas de "Docs-RH"
+INSERT INTO tb_arquivo (nome_arquivo, caminho_armazenamento, tamanho_bytes, data_upload, pasta_id, criado_por_id) VALUES
+                                                                                                                      ('Manual_Recursos_Humanos.pdf', '/caminho/servidor/manual_rh.pdf', 4096, NOW(), 12, 3),
+                                                                                                                      ('Procedimentos_Internos.pdf', '/caminho/servidor/procedimentos.pdf', 2048, NOW(), 3, 3),
+                                                                                                                      ('Formularios_Contratacao.pdf', '/caminho/servidor/formularios.pdf', 1024, NOW(), 14, 3);
+
+
 -- Define quais usuários têm acesso direto a quais pastas principais.
 INSERT INTO tb_permissao_pasta (usuario_id, pasta_id) VALUES
    (1, 1), -- Admin tem acesso à pasta Financeiro
@@ -99,11 +153,3 @@ INSERT INTO tb_permissao_pasta (usuario_id, pasta_id) VALUES
    (4, 3), -- Usuario4 (GERENTE) tem acesso à pasta RH
    (5, 5); -- Usuario5 (BASIC) tem acesso à pasta Jurídico
 
--- Cada arquivo está associado a uma pasta e a um usuário que o criou.
--- Caminho de armazenamento é apenas um exemplo.
-INSERT INTO tb_arquivo (nome_arquivo, caminho_armazenamento, tamanho_bytes, data_upload, pasta_id, criado_por_id) VALUES
-                    ('Relatorio_de_Vendas.pdf', '/caminho/servidor/vendas.pdf', 10240, NOW(), 1, 2),
-                    ('Plano_de_Midia.pdf', '/caminho/servidor/midia.pdf', 5120, NOW(), 2, 4),
-                    ('Manual_do_Funcionario.pdf', '/caminho/servidor/manual.pdf', 8192, NOW(), 3, 3),
-                    ('Especificacoes_Sistema.pdf', '/caminho/servidor/specs.pdf', 20480, NOW(), 4, 1),
-                    ('Minuta_de_Acordo.pdf', '/caminho/servidor/acordo.pdf', 4096, NOW(), 5, 5);

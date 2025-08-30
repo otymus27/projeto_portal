@@ -1,6 +1,7 @@
 package br.com.carro.controllers;
 
 import br.com.carro.autenticacao.JpaUserDetailsService;
+import br.com.carro.entities.DTO.PastaDTO;
 import br.com.carro.entities.DTO.PastaRequestDTO;
 import br.com.carro.entities.Pasta;
 import br.com.carro.entities.Usuario.Usuario;
@@ -30,7 +31,7 @@ public class PastaController {
 
     @Autowired
     private final PastaService pastaService;
-    private final JpaUserDetailsService userDetailsService; // ✅ Injetando o service de usuário
+    private final JpaUserDetailsService userDetailsService;
 
     @Autowired
     public PastaController(PastaService pastaService, JpaUserDetailsService userDetailsService) {
@@ -38,14 +39,10 @@ public class PastaController {
         this.userDetailsService = userDetailsService;
     }
 
-    /**
-     * Lista as pastas principais (raiz) do setor do usuário logado.
-     * Se o usuário for ADMIN, ele verá todas as pastas.
-     */
     @GetMapping("/principais")
     @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE', 'BASIC')")
-    public ResponseEntity<Page<Pasta>> listarPastasPrincipaisDoUsuario(
-            @AuthenticationPrincipal Jwt jwt, // ✅ Injetando o objeto Jwt
+    public ResponseEntity<Page<PastaDTO>> listarPastasPrincipaisDoUsuario(
+            @AuthenticationPrincipal Jwt jwt,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "5") int size,
             @RequestParam(defaultValue = "nomePasta") String sortField,
@@ -54,77 +51,54 @@ public class PastaController {
         if (jwt == null || !jwt.hasClaim("sub")) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
-
-        // ✅ Carrega a entidade Usuario completa do banco de dados
         Usuario usuarioLogado = (Usuario) userDetailsService.loadUserByUsername(jwt.getSubject());
 
-
-        Sort.Direction direction = "desc".equalsIgnoreCase(sortDir) ? Sort.Direction.DESC : Sort.Direction.ASC;
-        Sort sortObj = Sort.by(direction, sortField);
+        Sort sortObj = Sort.by("desc".equalsIgnoreCase(sortDir) ? Sort.Direction.DESC : Sort.Direction.ASC, sortField);
         Pageable pageable = PageRequest.of(page, size, sortObj);
 
-        // ✅ Lógica de verificação do papel (role) do usuário
         boolean isAdmin = usuarioLogado.getRoles().stream().anyMatch(r -> r.getNome().equals("ADMIN"));
 
-        // ✅ A chamada ao serviço agora passa a informação sobre o papel
-        // O Service decide qual método do Repositorio chamar com base nesta flag.
-        Page<Pasta> pastas = pastaService.listarPastasPrincipais(
-                isAdmin,
-                usuarioLogado,
-                pageable
-        );
-
-        return ResponseEntity.ok(pastas);
+        return ResponseEntity.ok(pastaService.listarPastasPrincipais(isAdmin, usuarioLogado, pageable));
     }
 
-    /**
-     * Lista as subpastas de uma pasta pai específica.
-     * Acesso permitido para 'ADMIN' e 'GERENTE'.
-     */
     @GetMapping("/subpastas/{pastaPaiId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
-    public ResponseEntity<Page<Pasta>> listarSubpastas(
+    public ResponseEntity<Page<PastaDTO>> listarSubpastas(
             @PathVariable Long pastaPaiId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "5") int size,
             @RequestParam(defaultValue = "nomePasta") String sortField,
             @RequestParam(defaultValue = "asc") String sortDir
     ) {
-        Sort.Direction direction = "desc".equalsIgnoreCase(sortDir) ? Sort.Direction.DESC : Sort.Direction.ASC;
-        Sort sortObj = Sort.by(direction, sortField);
+        Sort sortObj = Sort.by("desc".equalsIgnoreCase(sortDir) ? Sort.Direction.DESC : Sort.Direction.ASC, sortField);
         Pageable pageable = PageRequest.of(page, size, sortObj);
 
-        Page<Pasta> subpastas = pastaService.listarSubpastas(pastaPaiId, pageable);
-        return ResponseEntity.ok(subpastas);
+        return ResponseEntity.ok(pastaService.listarSubpastas(pastaPaiId, pageable));
     }
 
-    /**
-     * Busca uma pasta por ID.
-     * Acesso para 'ADMIN', 'BASIC' e 'GERENTE'.
-     */
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'BASIC', 'GERENTE')")
     public ResponseEntity<?> buscarPorId(@PathVariable Long id) {
         try {
             Pasta pasta = pastaService.buscarPorId(id);
-            return new ResponseEntity<>(pasta, HttpStatus.OK);
+            return new ResponseEntity<>(PastaDTO.fromEntity(pasta), HttpStatus.OK);
         } catch (Exception e) {
             return new ResponseEntity<>(null, HttpStatus.BAD_REQUEST);
         }
     }
 
     /**
-     * Cria uma nova pasta. Ela pode ser uma pasta raiz (sem pastaPai) ou uma subpasta.
+     * Cria uma nova pasta. Ela pode ser uma pasta raiz ou uma subpasta.
      * Acesso restrito a 'ADMIN'.
      */
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<?> criarPasta(@RequestBody PastaRequestDTO pastaDTO) {
+    public ResponseEntity<PastaDTO> criarPasta(@RequestBody PastaRequestDTO pastaDTO) {
         try {
-            Pasta novaPasta = this.pastaService.criarPastaFromDto(pastaDTO);
-            return ResponseEntity.status(HttpStatus.CREATED).body(novaPasta);
+            Pasta novaPasta = this.pastaService.criarPasta(pastaDTO);
+            return ResponseEntity.status(HttpStatus.CREATED).body(PastaDTO.fromEntity(novaPasta));
         } catch (IllegalArgumentException | EntityNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
         }
     }
 
@@ -134,28 +108,28 @@ public class PastaController {
      */
     @PatchMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<?> atualizar(@PathVariable Long id, @RequestBody Pasta pasta) {
+    public ResponseEntity<PastaDTO> atualizar(@PathVariable Long id, @RequestBody Pasta pasta) {
         try {
             Pasta pastaAtualizada = this.pastaService.atualizar(id, pasta);
-            return new ResponseEntity<>(pastaAtualizada, HttpStatus.OK);
+            return new ResponseEntity<>(PastaDTO.fromEntity(pastaAtualizada), HttpStatus.OK);
         } catch (Exception e) {
-            return new ResponseEntity<>("Erro ao atualizar a pasta: " + e.getMessage(), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(null, HttpStatus.BAD_REQUEST);
         }
     }
 
     /**
-     * Exclui uma pasta e suas subpastas.
+     * Exclui uma pasta por ID, incluindo suas subpastas.
      * Acesso restrito a 'ADMIN'.
      */
     @DeleteMapping("/{id}")
     @Transactional
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<String> excluir(@PathVariable Long id) {
+    public ResponseEntity<Void> excluir(@PathVariable Long id) {
         try {
             this.pastaService.excluir(id);
-            return new ResponseEntity<>("Pasta com ID " + id + " excluída com sucesso.", HttpStatus.OK);
+            return new ResponseEntity<>(HttpStatus.OK);
         } catch (Exception e) {
-            return new ResponseEntity<>("Erro ao excluir a pasta: " + e.getMessage(), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
         }
     }
 }

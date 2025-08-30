@@ -1,6 +1,8 @@
 package br.com.carro.controllers;
 
 import br.com.carro.entities.Arquivo;
+import br.com.carro.entities.DTO.ArquivoDTO;
+import br.com.carro.entities.DTO.ArquivoUpdateDTO;
 import br.com.carro.entities.Usuario.Usuario;
 import br.com.carro.services.ArquivoService;
 import br.com.carro.autenticacao.JpaUserDetailsService;
@@ -8,6 +10,10 @@ import jakarta.persistence.EntityNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -22,11 +28,12 @@ import java.net.MalformedURLException;
 import java.nio.file.AccessDeniedException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Arrays;
 import java.util.List;
 import org.springframework.web.server.ResponseStatusException;
 
 @RestController
-@RequestMapping("/api/arquivos")
+@RequestMapping("/api/arquivo")
 public class ArquivoController {
 
     private final ArquivoService arquivoService;
@@ -51,12 +58,36 @@ public class ArquivoController {
     ) {
         try {
             Usuario usuarioLogado = (Usuario) userDetailsService.loadUserByUsername(jwt.getSubject());
-            // ✅ Agora passa o usuário para o serviço
-            Arquivo arquivoSalvo = arquivoService.salvarArquivo(file, pastaId, usuarioLogado);
-            return ResponseEntity.status(HttpStatus.CREATED).body(arquivoSalvo);
+
+            // ✅ Agora o serviço retorna um DTO
+            ArquivoDTO arquivoSalvoDto = arquivoService.uploadArquivo(file, pastaId, usuarioLogado);
+
+            return ResponseEntity.status(HttpStatus.CREATED).body(arquivoSalvoDto);
         } catch (IOException e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Erro ao salvar o arquivo: " + e.getMessage());
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+    }
+
+    /**
+     * ✅ NOVO ENDPOINT: Upload de múltiplos arquivos.
+     */
+    @PostMapping(value = "/upload-multiplos", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
+    public ResponseEntity<?> uploadMultiplosArquivos(
+            @RequestParam("files") MultipartFile[] files,
+            @RequestParam("pastaId") Long pastaId,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        try {
+            Usuario usuarioLogado = (Usuario) userDetailsService.loadUserByUsername(jwt.getSubject());
+            List<ArquivoDTO> arquivosSalvos = arquivoService.uploadMultiplosArquivos(Arrays.asList(files), pastaId, usuarioLogado);
+            return ResponseEntity.status(HttpStatus.CREATED).body(arquivosSalvos);
+        } catch (IOException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Erro ao salvar os arquivos: " + e.getMessage());
         } catch (EntityNotFoundException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
         }
@@ -116,6 +147,36 @@ public class ArquivoController {
     }
 
     /**
+     * Atualiza os metadados de um arquivo por ID.
+     */
+    @PatchMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
+    public ResponseEntity<ArquivoDTO> atualizarMetadados(@PathVariable Long id, @RequestBody ArquivoUpdateDTO dto) {
+        try {
+            ArquivoDTO arquivoAtualizado = arquivoService.atualizarMetadados(id, dto);
+            return ResponseEntity.ok(arquivoAtualizado);
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+    }
+
+    /**
+     * Substitui o conteúdo de um arquivo por uma nova versão.
+     */
+    @PostMapping("/{id}/substituir")
+    @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
+    public ResponseEntity<ArquivoDTO> substituirArquivo(@PathVariable Long id, @RequestParam("file") MultipartFile file) {
+        try {
+            ArquivoDTO arquivoAtualizado = arquivoService.substituirArquivo(id, file);
+            return ResponseEntity.ok(arquivoAtualizado);
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        } catch (IOException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    /**
      * Exclui um arquivo pelo seu ID.
      * Agora passa o usuário logado para o serviço para a verificação de permissão.
      */
@@ -134,4 +195,56 @@ public class ArquivoController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
         }
     }
+
+    /**
+     * Exclui múltiplos arquivos por uma lista de IDs.
+     */
+    @DeleteMapping("/excluir-multiplos")
+    @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
+    public ResponseEntity<String> excluirMultiplosArquivos(@RequestBody List<Long> arquivoIds) {
+        try {
+            arquivoService.excluirMultiplosArquivos(arquivoIds);
+            return ResponseEntity.ok("Arquivos excluídos com sucesso.");
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+        } catch (IOException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Erro ao excluir arquivos do disco.");
+        }
+    }
+
+    /**
+     * Exclui todos os arquivos de uma pasta por ID.
+     */
+    @DeleteMapping("/pasta/{id}/excluir-arquivos")
+    @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
+    public ResponseEntity<String> excluirTodosArquivosNaPasta(@PathVariable("id") Long pastaId) {
+        try {
+            arquivoService.excluirTodosArquivosNaPasta(pastaId);
+            return ResponseEntity.ok("Todos os arquivos da pasta foram excluídos com sucesso.");
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+        } catch (IOException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Erro ao excluir arquivos do disco.");
+        }
+    }
+
+    /**
+     * Busca arquivos por nome em qualquer parte.
+     */
+    @GetMapping("/buscar")
+    @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE', 'BASIC')")
+    public ResponseEntity<Page<ArquivoDTO>> buscarArquivosPorNome(
+            @RequestParam("nome") String nome,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "nomeArquivo") String sortField,
+            @RequestParam(defaultValue = "asc") String sortDir
+    ) {
+        Sort sortObj = Sort.by("desc".equalsIgnoreCase(sortDir) ? Sort.Direction.DESC : Sort.Direction.ASC, sortField);
+        Pageable pageable = PageRequest.of(page, size, sortObj);
+
+        Page<ArquivoDTO> arquivos = arquivoService.buscarPorNome(nome, pageable);
+        return ResponseEntity.ok(arquivos);
+    }
+
 }

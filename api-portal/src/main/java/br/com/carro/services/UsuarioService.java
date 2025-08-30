@@ -1,24 +1,20 @@
 package br.com.carro.services;
 
-import br.com.carro.entities.Carro;
 import br.com.carro.entities.Pasta;
 import br.com.carro.entities.Role.Role;
 import br.com.carro.entities.Role.RoleDto;
 import br.com.carro.entities.Usuario.Usuario;
-import br.com.carro.entities.Usuario.UsuarioCadastroDto;
 import br.com.carro.entities.Usuario.UsuarioDto;
 import br.com.carro.repositories.RoleRepository;
 import br.com.carro.repositories.UsuarioRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.HashSet;
-import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;

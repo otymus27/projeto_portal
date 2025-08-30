@@ -1,6 +1,5 @@
 package br.com.carro.controllers;
 
-import br.com.carro.entities.Marca;
 import br.com.carro.entities.Role.Role;
 import br.com.carro.repositories.RoleRepository;
 import br.com.carro.services.RoleService;
