@@ -7,204 +7,194 @@ import br.com.carro.entities.Pasta;
 import br.com.carro.entities.Usuario.Usuario;
 import br.com.carro.repositories.ArquivoRepository;
 import br.com.carro.repositories.PastaRepository;
-
-import jakarta.transaction.Transactional;
-import org.springframework.beans.factory.annotation.Value; // ✅ Importe a anotação @Value
 import jakarta.persistence.EntityNotFoundException;
-import org.springframework.beans.factory.annotation.Autowired;
+import jakarta.transaction.Transactional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
-import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
-
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.*;
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
 public class ArquivoService {
 
-    // ✅ Variável que será injetada com o caminho do application.properties
-    @Value("${app.file.upload-dir}")
-    private String uploadDir;
-
     private final ArquivoRepository arquivoRepository;
     private final PastaRepository pastaRepository;
-    private final UsuarioService usuarioService; // Usar o UsuarioService para buscar o usuário
 
-   // private final Path fileStorageLocation = Paths.get("uploads").toAbsolutePath();
-
-
-    @Autowired
-    public ArquivoService(ArquivoRepository arquivoRepository, PastaRepository pastaRepository, UsuarioService usuarioService) {
+    public ArquivoService(ArquivoRepository arquivoRepository, PastaRepository pastaRepository) {
         this.arquivoRepository = arquivoRepository;
         this.pastaRepository = pastaRepository;
-        this.usuarioService = usuarioService;
     }
 
-    // ✅ Método público para upload de UM único arquivo
     @Transactional
-    public ArquivoDTO uploadArquivo(MultipartFile file, Long pastaId, Usuario usuario) throws IOException {
-        Arquivo arquivoSalvo = salvarArquivoUnico(file, pastaId, usuario);
-        return ArquivoDTO.fromEntity(arquivoSalvo);
+    public List<ArquivoDTO> uploadArquivo(MultipartFile file, Long pastaId, Usuario usuario) throws IOException {
+        Arquivo arquivoSalvo = salvarArquivoFisicoEDb(file, pastaId, usuario);
+        return List.of(ArquivoDTO.fromEntity(arquivoSalvo));
     }
 
-    // ✅ Método público para upload de MÚLTIPLOS arquivos
     @Transactional
     public List<ArquivoDTO> uploadMultiplosArquivos(List<MultipartFile> files, Long pastaId, Usuario usuario) throws IOException {
         List<ArquivoDTO> arquivosSalvos = new ArrayList<>();
-
         for (MultipartFile file : files) {
             if (!file.isEmpty()) {
-                Arquivo arquivoSalvo = salvarArquivoUnico(file, pastaId, usuario);
+                Arquivo arquivoSalvo = salvarArquivoFisicoEDb(file, pastaId, usuario);
                 arquivosSalvos.add(ArquivoDTO.fromEntity(arquivoSalvo));
             }
         }
-
         return arquivosSalvos;
     }
 
-    // ✅ O método agora recebe o usuário como argumento
-    public Arquivo buscarPorId(Long id, Usuario usuario) throws AccessDeniedException {
-        Arquivo arquivo = arquivoRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Arquivo não encontrado com o ID: " + id));
-
-        if (!checarAcessoPasta(arquivo.getPasta(), usuario)) {
-            throw new AccessDeniedException("Você não tem permissão para acessar este arquivo.");
-        }
-
-        return arquivo;
+    public ArquivoDTO buscarPorId(Long id, Usuario usuario) {
+        Arquivo arquivo = getArquivoComAcesso(id, usuario);
+        return ArquivoDTO.fromEntity(arquivo);
     }
 
-    // ✅ O método agora recebe o usuário como argumento
-    public List<Arquivo> listarArquivosPorPasta(Long pastaId, Usuario usuario) throws AccessDeniedException {
-        Pasta pasta = pastaRepository.findById(pastaId)
-                .orElseThrow(() -> new EntityNotFoundException("Pasta não encontrada com o ID: " + pastaId));
-
-        if (!checarAcessoPasta(pasta, usuario)) {
-            throw new AccessDeniedException("Você não tem permissão para listar arquivos desta pasta.");
-        }
-
-        return arquivoRepository.findByPastaId(pastaId);
+    public List<ArquivoDTO> listarArquivosPorPasta(Long pastaId, Usuario usuario) {
+        Pasta pasta = getPastaComAcesso(pastaId, usuario);
+        List<Arquivo> arquivos = arquivoRepository.findByPastaId(pasta.getId());
+        return arquivos.stream()
+                .map(ArquivoDTO::fromEntity)
+                .collect(Collectors.toList());
     }
 
-    // ✅ O método agora recebe o usuário como argumento
+    @Transactional
     public void excluirArquivo(Long id, Usuario usuario) throws IOException {
-        Arquivo arquivo = arquivoRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Arquivo não encontrado com o ID: " + id));
-
-        if (!checarAcessoPasta(arquivo.getPasta(), usuario)) {
-            throw new AccessDeniedException("Você não tem permissão para excluir este arquivo.");
-        }
-
-        Path caminhoCompletoArquivo = Paths.get(arquivo.getCaminhoArmazenamento());
-
-        // ✅ LINHA DE DIAGNÓSTICO
-        System.out.println("Caminho do arquivo a ser excluído: " + caminhoCompletoArquivo.toAbsolutePath().normalize().toString());
-
-        // Usa a API Files para deletar o arquivo físico de forma segura
-        Files.deleteIfExists(caminhoCompletoArquivo);
-
+        Arquivo arquivo = getArquivoComAcesso(id, usuario);
+        excluirArquivoFisico(arquivo.getCaminhoArmazenamento());
         arquivoRepository.delete(arquivo);
     }
 
-    /**
-     * Atualiza os metadados (ex: nome) de um arquivo existente.
-     * @param id O ID do arquivo.
-     * @param dto Os dados a serem atualizados.
-     * @return O DTO do arquivo atualizado.
-     */
     @Transactional
-    public ArquivoDTO atualizarMetadados(Long id, ArquivoUpdateDTO dto) {
-        Arquivo arquivo = arquivoRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Arquivo não encontrado com o ID: " + id));
-
+    public ArquivoDTO atualizarMetadados(Long id, ArquivoUpdateDTO dto, Usuario usuario) {
+        Arquivo arquivo = getArquivoComAcesso(id, usuario);
         arquivo.setNomeArquivo(dto.novoNome());
+        return ArquivoDTO.fromEntity(arquivoRepository.save(arquivo));
+    }
 
-        Arquivo arquivoAtualizado = arquivoRepository.save(arquivo);
+    // --- NOVO MÉTODO SUBSTITUIR ---
+    @Transactional
+    public ArquivoDTO substituirArquivo(Long id, MultipartFile novoArquivo, Usuario usuario) throws IOException {
+        // 1. Busca o arquivo e verifica o acesso
+        Arquivo arquivoExistente = getArquivoComAcesso(id, usuario);
+
+        // 2. Exclui o arquivo físico antigo
+        excluirArquivoFisico(arquivoExistente.getCaminhoArmazenamento());
+
+        // 3. Obtém o caminho da pasta
+        Pasta pastaDoArquivo = arquivoExistente.getPasta();
+        Path pastaPath = Paths.get(pastaDoArquivo.getCaminhoCompleto()).toAbsolutePath().normalize();
+
+        // 4. Cria um novo nome e caminho para o novo arquivo
+        String nomeOriginalNovoArquivo = StringUtils.cleanPath(novoArquivo.getOriginalFilename());
+        String novoNomeArquivoUnico = UUID.randomUUID().toString() + "_" + nomeOriginalNovoArquivo;
+        Path novoCaminhoFisico = pastaPath.resolve(novoNomeArquivoUnico);
+
+        // 5. Salva o novo arquivo físico no novo caminho
+        Files.copy(novoArquivo.getInputStream(), novoCaminhoFisico, StandardCopyOption.REPLACE_EXISTING);
+
+        // 6. Atualiza os metadados do arquivo no banco
+        arquivoExistente.setNomeArquivo(nomeOriginalNovoArquivo);
+        arquivoExistente.setCaminhoArmazenamento(novoCaminhoFisico.toString());
+        arquivoExistente.setTamanhoBytes(novoArquivo.getSize());
+        arquivoExistente.setDataUpload(LocalDateTime.now());
+
+        Arquivo arquivoAtualizado = arquivoRepository.save(arquivoExistente);
         return ArquivoDTO.fromEntity(arquivoAtualizado);
     }
 
-    /**
-     * Substitui o arquivo físico por uma nova versão, mantendo a mesma entrada no banco.
-     * @param id O ID do arquivo.
-     * @param novoArquivo A nova versão do arquivo.
-     * @return O DTO do arquivo atualizado.
-     */
     @Transactional
-    public ArquivoDTO substituirArquivo(Long id, MultipartFile novoArquivo) throws IOException {
-        Arquivo arquivo = arquivoRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Arquivo não encontrado com o ID: " + id));
-
-        Path filePath = Paths.get(arquivo.getCaminhoArmazenamento());
-
-        // 1. Exclui o arquivo antigo do disco, se existir.
-        Files.deleteIfExists(filePath);
-
-        // 2. Salva o novo arquivo no mesmo caminho.
-        Files.copy(novoArquivo.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
-
-        // 3. Atualiza os metadados no banco de dados.
-        arquivo.setNomeArquivo(novoArquivo.getOriginalFilename());
-        arquivo.setTamanhoBytes(novoArquivo.getSize());
-        arquivo.setDataUpload(LocalDateTime.now());
-
-        Arquivo arquivoAtualizado = arquivoRepository.save(arquivo);
-        return ArquivoDTO.fromEntity(arquivoAtualizado);
-    }
-
-    /**
-     * Exclui múltiplos arquivos do sistema de arquivos e do banco de dados.
-     * @param arquivoIds A lista de IDs dos arquivos a serem excluídos.
-     * @throws IOException Se houver um erro ao excluir um arquivo do disco.
-     */
-    @Transactional
-    public void excluirMultiplosArquivos(List<Long> arquivoIds) throws IOException {
+    public void excluirMultiplosArquivos(List<Long> arquivoIds, Usuario usuario) throws IOException {
         List<Arquivo> arquivos = arquivoRepository.findAllById(arquivoIds);
         if (arquivos.isEmpty()) {
             throw new EntityNotFoundException("Nenhum arquivo encontrado com os IDs fornecidos.");
         }
-
         for (Arquivo arquivo : arquivos) {
-            Path filePath = Paths.get(arquivo.getCaminhoArmazenamento());
-            Files.deleteIfExists(filePath);
+            verificarAcessoEPermitir(arquivo.getPasta(), usuario);
         }
-
+        for (Arquivo arquivo : arquivos) {
+            excluirArquivoFisico(arquivo.getCaminhoArmazenamento());
+        }
         arquivoRepository.deleteAll(arquivos);
     }
 
-    /**
-     * Exclui todos os arquivos de uma pasta específica.
-     * @param pastaId O ID da pasta cujos arquivos devem ser excluídos.
-     * @throws IOException Se houver um erro ao excluir um arquivo do disco.
-     */
+    // No seu ArquivoService.java
     @Transactional
-    public void excluirTodosArquivosNaPasta(Long pastaId) throws IOException {
-        // ✅ Busca diretamente os arquivos, evitando o problema de lazy loading
-        List<Arquivo> arquivosDaPasta = arquivoRepository.findByPastaId(pastaId);
+    public void excluirTodosArquivosNaPasta(Long pastaId, Usuario usuario) throws IOException {
+        Pasta pasta = getPastaComAcesso(pastaId, usuario);
+        List<Arquivo> arquivosDaPasta = arquivoRepository.findByPastaId(pasta.getId());
 
         if (arquivosDaPasta.isEmpty()) {
-            // Se a lista estiver vazia, não há arquivos para excluir, mas a operação é considerada sucesso
+            System.out.println("Nenhum arquivo encontrado na pasta com ID: " + pastaId);
             return;
         }
 
+        // Exclui os arquivos físicos um por um
         for (Arquivo arquivo : arquivosDaPasta) {
-            Path filePath = Paths.get(arquivo.getCaminhoArmazenamento());
-            Files.deleteIfExists(filePath);
+            excluirArquivoFisico(arquivo.getCaminhoArmazenamento());
         }
 
-        arquivoRepository.deleteAll(arquivosDaPasta);
+        // Exclui os registros do banco de dados de forma otimizada
+        arquivoRepository.deleteAllByPastaId(pastaId);
+
+        System.out.println("Exclusão no banco de dados concluída com sucesso!");
     }
 
+    public Page<ArquivoDTO> buscarPorNome(String nome, Pageable pageable, Usuario usuario) {
+        Page<Arquivo> arquivos = arquivoRepository.findByNomeArquivoContainingIgnoreCase(nome, pageable);
+        List<ArquivoDTO> dtoList = arquivos.getContent().stream()
+                .filter(arquivo -> podeAcessarPasta(arquivo.getPasta(), usuario))
+                .map(ArquivoDTO::fromEntity)
+                .collect(Collectors.toList());
+        return new PageImpl<>(dtoList, pageable, dtoList.size());
+    }
 
-    // Método auxiliar para checar permissão na pasta
-    private boolean checarAcessoPasta(Pasta pasta, Usuario usuario) {
+    public Arquivo getArquivoComAcesso(Long id, Usuario usuario) {
+        Arquivo arquivo = arquivoRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Arquivo não encontrado com o ID: " + id));
+        verificarAcessoEPermitir(arquivo.getPasta(), usuario);
+        return arquivo;
+    }
+
+    private Pasta getPastaComAcesso(Long id, Usuario usuario) {
+        Pasta pasta = pastaRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Pasta não encontrada com o ID: " + id));
+        verificarAcessoEPermitir(pasta, usuario);
+        return pasta;
+    }
+
+    private Arquivo salvarArquivoFisicoEDb(MultipartFile file, Long pastaId, Usuario usuario) throws IOException {
+        Pasta pasta = getPastaComAcesso(pastaId, usuario);
+        Path pastaPath = Paths.get(pasta.getCaminhoCompleto()).toAbsolutePath().normalize();
+        Files.createDirectories(pastaPath);
+        String nomeOriginal = StringUtils.cleanPath(file.getOriginalFilename());
+        String nomeArquivoUnico = UUID.randomUUID().toString() + "_" + nomeOriginal;
+        Path targetLocation = pastaPath.resolve(nomeArquivoUnico);
+        Files.copy(file.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);
+        Arquivo arquivo = new Arquivo();
+        arquivo.setNomeArquivo(nomeOriginal);
+        arquivo.setCaminhoArmazenamento(targetLocation.toString());
+        arquivo.setTamanhoBytes(file.getSize());
+        arquivo.setDataUpload(LocalDateTime.now());
+        arquivo.setPasta(pasta);
+        arquivo.setCriadoPor(usuario);
+        return arquivoRepository.save(arquivo);
+    }
+
+    private void excluirArquivoFisico(String caminho) throws IOException {
+        Path filePath = Paths.get(caminho);
+        Files.deleteIfExists(filePath);
+    }
+
+    private boolean podeAcessarPasta(Pasta pasta, Usuario usuario) {
         if (usuario.getRoles().stream().anyMatch(role -> role.getNome().equals("ADMIN"))) {
             return true;
         }
@@ -214,60 +204,18 @@ public class ArquivoService {
         if (pasta.getUsuariosComPermissao().contains(usuario)) {
             return true;
         }
-        if (pasta.getPastaPai() == null) {
-            return usuario.getPastasPrincipaisAcessadas().contains(pasta);
+        if (pasta.getPastaPai() != null) {
+            return podeAcessarPasta(pasta.getPastaPai(), usuario);
         }
-        return checarAcessoPasta(pasta.getPastaPai(), usuario);
+        if (usuario.getPastasPrincipaisAcessadas().contains(pasta)) {
+            return true;
+        }
+        return false;
     }
 
-
-
-    /**
-     * Busca arquivos por uma parte do nome, com paginação.
-     * @param nome O trecho do nome a ser buscado.
-     * @param pageable As informações de paginação e ordenação.
-     * @return Uma página de DTOs de Arquivo.
-     */
-    public Page<ArquivoDTO> buscarPorNome(String nome, Pageable pageable) {
-        Page<Arquivo> arquivos = arquivoRepository.findByNomeArquivoContainingIgnoreCase(nome, pageable);
-        List<ArquivoDTO> dtoList = arquivos.getContent().stream()
-                .map(ArquivoDTO::fromEntity)
-                .collect(Collectors.toList());
-        return new PageImpl<>(dtoList, pageable, arquivos.getTotalElements());
-    }
-
-    // --- LÓGICA PRIVADA DE SALVAMENTO ---
-
-    /**
-     * Lógica central para salvar um único arquivo no disco e no banco de dados.
-     * Este método é chamado tanto pelo upload individual quanto pelo múltiplo.
-     */
-    private Arquivo salvarArquivoUnico(MultipartFile file, Long pastaId, Usuario usuario) throws IOException {
-        Pasta pasta = pastaRepository.findById(pastaId)
-                .orElseThrow(() -> new EntityNotFoundException("Pasta não encontrada com o ID: " + pastaId));
-
-        // Aqui você pode adicionar a sua verificação de permissão, se necessário
-         if (!checarAcessoPasta(pasta, usuario)) {
-             throw new AccessDeniedException("Você não tem permissão para adicionar arquivos nesta pasta.");
-         }
-
-        Path pastaPath = Paths.get(pasta.getCaminhoCompleto()).toAbsolutePath().normalize();
-        Files.createDirectories(pastaPath);
-
-        String nomeDoArquivo = Paths.get(file.getOriginalFilename()).getFileName().toString();
-        String nomeArquivoUnico = UUID.randomUUID().toString() + "_" + StringUtils.cleanPath(nomeDoArquivo);
-
-        Path targetLocation = pastaPath.resolve(nomeArquivoUnico);
-        Files.copy(file.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);
-
-        Arquivo arquivo = new Arquivo();
-        arquivo.setNomeArquivo(nomeArquivoUnico); // ✅ Salve o nome único aqui para evitar problemas de caractere
-        arquivo.setCaminhoArmazenamento(targetLocation.toString()); // Salva o caminho ABSOLUTO
-        arquivo.setTamanhoBytes(file.getSize());
-        arquivo.setDataUpload(LocalDateTime.now());
-        arquivo.setPasta(pasta);
-        arquivo.setCriadoPor(usuario);
-
-        return arquivoRepository.save(arquivo);
+    private void verificarAcessoEPermitir(Pasta pasta, Usuario usuario) {
+        if (!podeAcessarPasta(pasta, usuario)) {
+            throw new AccessDeniedException("Você não tem permissão para acessar esta pasta.");
+        }
     }
 }

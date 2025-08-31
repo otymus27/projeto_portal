@@ -235,7 +235,7 @@ public class PastaController {
     /**
      * ✅ NOVO ENDPOINT: Substitui o conteúdo de uma pasta existente.
      */
-    @PostMapping(value = "/substituir/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PutMapping(value = "/substituir/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
     public ResponseEntity<String> substituirPasta(
             @PathVariable("id") Long pastaId,

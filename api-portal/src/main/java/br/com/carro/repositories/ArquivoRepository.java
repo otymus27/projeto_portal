@@ -5,6 +5,9 @@ import br.com.carro.entities.Arquivo;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -20,5 +23,10 @@ public interface ArquivoRepository extends JpaRepository<Arquivo, Long> {
 
     // Método para buscar arquivos pelo nome (ou parte dele)
     Page<Arquivo> findByNomeArquivoContainingIgnoreCase(String nomeArquivo, Pageable pageable);
+
+    // Método para excluir todos arquivos de uma pasta
+    @Modifying
+    @Query("DELETE FROM Arquivo a WHERE a.pasta.id = :pastaId")
+    void deleteAllByPastaId(@Param("pastaId") Long pastaId);
 
 }
