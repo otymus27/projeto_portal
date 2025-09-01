@@ -560,18 +560,41 @@ public class PastaService {
 
 
 
-    // Método auxiliar para deletar somente o conteúdo da pasta, não a pasta em si.
-    private void deletarConteudoPasta(Pasta pasta) {
-
-        // 1. Deleta arquivos de forma recursiva
-        deletarArquivosEEntidades(pasta);
-
-        // 2. Deleta as subpastas no banco de dados
-        // A entidade Pasta tem um cascade, então a deleção da pasta pai deve apagar os filhos,
-        // mas vamos garantir a deleção manual para maior segurança.
-        for (Pasta subpasta : pasta.getSubpastas()) {
-            deletarConteudoPasta(subpasta);
+    /**
+     * ✅ MÉTODO PRINCIPAL PARA DELETAR O CONTEÚDO DE UMA PASTA.
+     * Esta é a versão final e funcional, garantindo a exclusão recursiva
+     * de todos os arquivos e subpastas do sistema e do banco de dados.
+     * @param pasta A pasta cujo conteúdo será deletado.
+     */
+    private void deletarConteudoPasta(Pasta pasta) throws IOException {
+// Deleta todos os arquivos da pasta atual (entidades e físicos)
+        for (Arquivo arquivo : List.copyOf(pasta.getArquivos())) {
+            try {
+                Path filePath = Paths.get(arquivo.getCaminhoArmazenamento());
+                Files.deleteIfExists(filePath);
+            } catch (IOException e) {
+                System.err.println("Erro ao deletar arquivo físico: " + arquivo.getNomeArquivo() + " - " + e.getMessage());
+            }
+            arquivoRepository.delete(arquivo);
         }
+
+        // Deleta as subpastas de forma recursiva (da folha para a raiz)
+        for (Pasta subpasta : List.copyOf(pasta.getSubpastas())) {
+            deletarConteudoPasta(subpasta); // Chama recursivamente para deletar o conteúdo da subpasta
+
+            // Depois de deletar o conteúdo, apaga a própria subpasta
+            try {
+                Path folderPath = Paths.get(subpasta.getCaminhoCompleto());
+                Files.deleteIfExists(folderPath);
+            } catch (IOException e) {
+                System.err.println("Erro ao deletar pasta física: " + subpasta.getNomePasta() + " - " + e.getMessage());
+            }
+            pastaRepository.delete(subpasta);
+        }
+
+        // Limpa as coleções para evitar referências persistentes do Hibernate
+        pasta.getArquivos().clear();
+        pasta.getSubpastas().clear();
     }
 
     /**
@@ -592,25 +615,55 @@ public class PastaService {
     }
 
     /**
-     * ✅ NOVO MÉTODO: Substitui o conteúdo de uma pasta por um novo upload.
-     * Isso deleta o conteúdo existente e recria a estrutura a partir do novo upload.
-     * @param pastaId O ID da pasta a ser substituída.
-     * @param files Os novos arquivos para o upload.
-     * @param usuario O usuário logado.
-     * @throws IOException Se ocorrer um erro durante o upload.
+     * ✅ MÉTODO PARA SUBSTITUIR UMA PASTA EXISTENTE POR UMA NOVA VERSÃO.
+     * Esta é a versão corrigida para tratar o problema de caminho duplicado.
+     *
+     * @param pastaDestinoId O ID da pasta existente a ser substituída.
+     * @param files Os novos arquivos enviados para a substituição.
+     * @param usuario O usuário que está realizando a operação.
      */
     @Transactional
-    public void substituirPasta(Long pastaId, MultipartFile[] files, Usuario usuario) throws IOException {
-        // Deleta o conteúdo da pasta existente.
-        // A pasta pai continua a mesma, mas os arquivos e subpastas são deletados.
-        Pasta pastaParaSubstituir = pastaRepository.findById(pastaId)
-                .orElseThrow(() -> new EntityNotFoundException("Pasta não encontrada."));
+    public void substituirPasta(Long pastaDestinoId, MultipartFile[] files, Usuario usuario) throws IOException {
+        if (files == null || files.length == 0) {
+            throw new IllegalArgumentException("Nenhum arquivo para upload.");
+        }
 
-        // Chama o método para deletar o conteúdo.
-        deletarConteudoPasta(pastaParaSubstituir);
+        // 1. Encontra a pasta que será substituída
+        Pasta pastaDestino = pastaRepository.findById(pastaDestinoId)
+                .orElseThrow(() -> new EntityNotFoundException("Pasta de destino não encontrada."));
 
-        // Faz o upload da nova estrutura e arquivos no local da pasta existente.
-        criarSubpastasEArquivos(files, pastaId, usuario);
+        // 2. Extrai o nome da pasta raiz do novo upload a partir do primeiro arquivo
+        String caminhoRelativoPrimeiroArquivo = files[0].getOriginalFilename();
+        Path caminhoRaiz = Paths.get(caminhoRelativoPrimeiroArquivo);
+        String nomePastaRaiz = caminhoRaiz.getName(0).toString();
+
+        // 3. Deleta o conteúdo da pasta existente no back-end
+        deletarConteudoPasta(pastaDestino);
+
+        // 4. Itera sobre os novos arquivos do upload para criar a nova estrutura.
+        for (MultipartFile file : files) {
+            String caminhoRelativoCompleto = file.getOriginalFilename();
+            if (caminhoRelativoCompleto == null || caminhoRelativoCompleto.isEmpty()) {
+                continue;
+            }
+
+            Path caminhoDoArquivo = Paths.get(caminhoRelativoCompleto);
+            String nomeArquivo = caminhoDoArquivo.getFileName().toString();
+            Path caminhoPastaRelativo = caminhoDoArquivo.getParent();
+
+            // ✅ CORREÇÃO: Cria um loop seguro para navegar pela hierarquia de pastas.
+            Pasta pastaParaSalvarArquivo = pastaDestino;
+            if (caminhoPastaRelativo != null) {
+                // Itera sobre as partes do caminho, começando da segunda parte (índice 1)
+                for (int i = 1; i < caminhoPastaRelativo.getNameCount(); i++) {
+                    String nomeSubpasta = caminhoPastaRelativo.getName(i).toString();
+                    pastaParaSalvarArquivo = encontrarOuCriarPastaAninhada(pastaParaSalvarArquivo, nomeSubpasta, usuario);
+                }
+            }
+
+            // Salva o arquivo (substitui se já existir, mas aqui estamos recriando)
+            salvarArquivo(file, pastaParaSalvarArquivo, nomeArquivo, usuario);
+        }
     }
 
     /**

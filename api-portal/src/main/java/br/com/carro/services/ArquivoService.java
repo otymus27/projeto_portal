@@ -95,7 +95,10 @@ public class ArquivoService {
 
         // 4. Cria um novo nome e caminho para o novo arquivo
         String nomeOriginalNovoArquivo = StringUtils.cleanPath(novoArquivo.getOriginalFilename());
-        String novoNomeArquivoUnico = UUID.randomUUID().toString() + "_" + nomeOriginalNovoArquivo;
+        //String novoNomeArquivoUnico = UUID.randomUUID().toString() + "_" + nomeOriginalNovoArquivo;
+
+        String novoNomeArquivoUnico = nomeOriginalNovoArquivo;
+
         Path novoCaminhoFisico = pastaPath.resolve(novoNomeArquivoUnico);
 
         // 5. Salva o novo arquivo físico no novo caminho

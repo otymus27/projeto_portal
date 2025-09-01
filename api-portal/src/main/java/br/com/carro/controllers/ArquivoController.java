@@ -26,6 +26,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.net.MalformedURLException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
@@ -130,29 +131,51 @@ public class ArquivoController {
     ) {
         try {
             Usuario usuarioLogado = (Usuario) userDetailsService.loadUserByUsername(jwt.getSubject());
-            ArquivoDTO arquivoDTO = arquivoService.buscarPorId(id, usuarioLogado);
-
-            // Note: O serviço retornou um DTO. Para obter o caminho, você precisa buscar a entidade real.
-            // Para simplificar, a busca no serviço foi ajustada no refactoring.
             Arquivo arquivo = arquivoService.getArquivoComAcesso(id, usuarioLogado);
+
+            if (arquivo == null) {
+                System.err.println("Arquivo com ID " + id + " não encontrado.");
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
 
             Path filePath = Paths.get(arquivo.getCaminhoArmazenamento());
             Resource resource = new UrlResource(filePath.toUri());
 
             if (resource.exists() && resource.isReadable()) {
+                String nomeOriginal = arquivo.getNomeArquivo();
+
+                // Determina o Content-Type (com fallback)
+                String contentType = Files.probeContentType(filePath);
+                if (contentType == null) {
+                    System.err.println("Não foi possível determinar o Content-Type. Usando 'application/octet-stream'.");
+                    contentType = "application/octet-stream";
+                }
+
+                // Garante que o nome tenha extensão (caso não tenha)
+                if (!nomeOriginal.contains(".")) {
+                    String guessedExt = contentType.equals("application/pdf") ? ".pdf"
+                            : contentType.startsWith("image/") ? "." + contentType.split("/")[1]
+                            : ".bin"; // fallback
+                    nomeOriginal += guessedExt;
+                }
+
                 return ResponseEntity.ok()
-                        .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + arquivo.getNomeArquivo() + "\"")
-                        .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                        .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + nomeOriginal + "\"")
+                        .contentType(MediaType.parseMediaType(contentType))
                         .body(resource);
             } else {
+                System.err.println("Recurso não existe ou não pode ser lido: " + filePath.toAbsolutePath());
                 return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
             }
-        } catch (EntityNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-        } catch (MalformedURLException | AccessDeniedException e) {
+        } catch (EntityNotFoundException | AccessDeniedException e) {
+            System.err.println("Erro de permissão ou entidade não encontrada: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        } catch (IOException e) {
+            System.err.println("Erro de E/S ou URL malformada: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
+
 
     /**
      * Atualiza os metadados de um arquivo por ID.
@@ -178,7 +201,7 @@ public class ArquivoController {
     /**
      * Substitui o conteúdo de um arquivo por uma nova versão.
      */
-    @PostMapping("/{id}/substituir")
+    @PutMapping("/{id}/substituir")
     @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
     public ResponseEntity<ArquivoDTO> substituirArquivo(
             @PathVariable Long id,
