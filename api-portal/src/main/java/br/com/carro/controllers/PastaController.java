@@ -29,6 +29,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.nio.file.AccessDeniedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -102,14 +103,23 @@ public class PastaController {
      * Cria uma nova pasta. Ela pode ser uma pasta raiz ou uma subpasta.
      * Acesso restrito a 'ADMIN'.
      */
+    /**
+     * ✅ MÉTODO PRINCIPAL: Cria uma nova pasta. Ela pode ser uma pasta raiz ou uma subpasta.
+     */
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<PastaDTO> criarPasta(@RequestBody PastaRequestDTO pastaDTO) {
+    @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
+    public ResponseEntity<?> criarPasta(@RequestBody PastaRequestDTO pastaDTO, @AuthenticationPrincipal Jwt jwt) {
         try {
-            Pasta novaPasta = this.pastaService.criarPasta(pastaDTO);
+            Usuario usuarioLogado = (Usuario) userDetailsService.loadUserByUsername(jwt.getSubject());
+            Pasta novaPasta = this.pastaService.criarPasta(pastaDTO, usuarioLogado);
             return ResponseEntity.status(HttpStatus.CREATED).body(PastaDTO.fromEntity(novaPasta));
         } catch (IllegalArgumentException | EntityNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new Mensagem(e.getMessage()));
+        } catch (AccessDeniedException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new Mensagem(e.getMessage()));
+        } catch (Exception e) {
+            // Em caso de qualquer outro erro, retorne um erro genérico 500
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new Mensagem("Erro ao criar a pasta."));
         }
     }
 
@@ -120,18 +130,18 @@ public class PastaController {
     @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
     public ResponseEntity<String> uploadDiretorio(
             @RequestParam("files") MultipartFile[] files,
-            @RequestParam("pastaId") Long pastaPaiId,
+            @RequestParam("pastaId") Long pastaId,
             @AuthenticationPrincipal Jwt jwt
     ) {
         try {
             Usuario usuarioLogado = (Usuario) userDetailsService.loadUserByUsername(jwt.getSubject());
-            pastaService.criarSubpastasEArquivos(files, pastaPaiId, usuarioLogado);
+            pastaService.uploadDiretorioComArquivos(files, pastaId, usuarioLogado);
             return ResponseEntity.ok("Diretório e arquivos enviados com sucesso!");
-        } catch (IOException e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Erro ao processar o upload: " + e.getMessage());
-        } catch (EntityNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+        } catch (Exception e) {
+            // Este log é fundamental para capturar o erro
+            e.printStackTrace();
+            return ResponseEntity.status(500).body("Erro ao processar o upload: " + e.getMessage());
+
         }
     }
 
@@ -268,4 +278,6 @@ public class PastaController {
         pastaService.testarCaminhoDelecao();
         return ResponseEntity.ok("Teste de deleção executado. Verifique o console.");
     }
+
+
 }

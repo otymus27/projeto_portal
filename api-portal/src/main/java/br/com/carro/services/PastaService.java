@@ -9,7 +9,9 @@ import br.com.carro.repositories.ArquivoRepository;
 import br.com.carro.repositories.PastaRepository;
 import br.com.carro.repositories.UsuarioRepository;
 import jakarta.persistence.EntityNotFoundException;
-import jakarta.transaction.Transactional;
+//import jakarta.transaction.Transactional;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -20,9 +22,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.io.InputStream;
+import java.nio.file.*;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -87,41 +88,126 @@ public class PastaService {
                 .orElseThrow(() -> new EntityNotFoundException("Pasta não encontrada com o ID: " + id));
     }
 
+    /**
+     * ✅ MÉTODO PRINCIPAL: Cria uma nova pasta e o diretório físico no sistema.
+     * Pode ser uma pasta raiz ou uma subpasta, dependendo se o pastaPaiId for fornecido.
+     * @param pastaDTO O DTO com as informações da pasta (nome, id do pai, etc.).
+     * @param usuario O usuário que está criando a pasta.
+     * @return O objeto Pasta criado.
+     */
     @Transactional
-    public Pasta criarPasta(PastaRequestDTO pastaDTO) {
+    public Pasta criarPasta(PastaRequestDTO pastaDTO, Usuario usuario) throws AccessDeniedException {
+        if (pastaDTO.getNomePasta() == null || pastaDTO.getNomePasta().trim().isEmpty()) {
+            throw new IllegalArgumentException("O nome da pasta não pode ser vazio.");
+        }
+
         Pasta novaPasta = new Pasta();
         novaPasta.setNomePasta(pastaDTO.getNomePasta());
-        novaPasta.setCaminhoCompleto(pastaDTO.getCaminhoCompleto());
         novaPasta.setDataCriacao(LocalDateTime.now());
+        novaPasta.setCriadoPor(usuario);
 
+        // 1. Define o pai e o caminho físico
+        Path caminhoCompleto;
         if (pastaDTO.getPastaPaiId() != null) {
             Pasta pastaPai = pastaRepository.findById(pastaDTO.getPastaPaiId())
                     .orElseThrow(() -> new EntityNotFoundException("Pasta pai não encontrada."));
+            // ✅ VERIFICA A PERMISSÃO DE ACESSO
+            if (!podeAcessarPasta(pastaPai, usuario)) {
+                throw new AccessDeniedException("Você não tem permissão para criar pastas neste local.");
+            }
             novaPasta.setPastaPai(pastaPai);
+            // Constrói o caminho completo da subpasta
+            caminhoCompleto = Paths.get(pastaPai.getCaminhoCompleto()).resolve(pastaDTO.getNomePasta());
+        } else {
+            // Pasta principal
+            caminhoCompleto = Paths.get(fileStorageLocation).resolve(pastaDTO.getNomePasta());
         }
 
-        Set<Usuario> usuariosPermitidos = new HashSet<>();
-        if (pastaDTO.getUsuariosComPermissaoIds() != null) {
-            usuariosPermitidos.addAll(usuarioRepository.findAllById(pastaDTO.getUsuariosComPermissaoIds()));
+        // 2. Salva o caminho no objeto e tenta criar o diretório físico
+        try {
+            novaPasta.setCaminhoCompleto(caminhoCompleto.toString());
+            Files.createDirectories(caminhoCompleto);
+        } catch (IOException e) {
+            throw new RuntimeException("Erro ao criar o diretório físico da pasta: " + e.getMessage(), e);
         }
-        novaPasta.setUsuariosComPermissao(usuariosPermitidos);
 
-        return pastaRepository.save(novaPasta);
+        // 3. Adiciona permissões se fornecidas
+        if (pastaDTO.getUsuariosComPermissaoIds() != null && !pastaDTO.getUsuariosComPermissaoIds().isEmpty()) {
+            Set<Usuario> usuariosPermitidos = new HashSet<>(usuarioRepository.findAllById(pastaDTO.getUsuariosComPermissaoIds()));
+            novaPasta.setUsuariosComPermissao(usuariosPermitidos);
+        }
+
+        // 4. Salva a entidade no banco de dados
+        try {
+            return pastaRepository.save(novaPasta);
+        } catch (DataIntegrityViolationException e) {
+            throw new IllegalStateException("Já existe uma pasta com este nome neste local.", e);
+        }
     }
 
     @Transactional
-    public Pasta atualizar(Long id, Pasta pastaAtualizada) {
-        Pasta pastaExistente = pastaRepository.findById(id)
+    public Pasta atualizar(Long id, Pasta pastaAtualizada) throws IOException {
+        // 1. Usa o novo método para carregar a pasta e todo o seu conteúdo
+        Pasta pastaExistente = pastaRepository.findByIdWithChildrenAndFiles(id)
                 .orElseThrow(() -> new EntityNotFoundException("Pasta não encontrada com o ID: " + id));
 
-        if (pastaAtualizada.getNomePasta() != null) {
-            pastaExistente.setNomePasta(pastaAtualizada.getNomePasta());
-        }
-        if (pastaAtualizada.getCaminhoCompleto() != null) {
-            pastaExistente.setCaminhoCompleto(pastaAtualizada.getCaminhoCompleto());
+        // Apenas continua se o nome da pasta for alterado
+        if (pastaAtualizada.getNomePasta() == null || pastaAtualizada.getNomePasta().equals(pastaExistente.getNomePasta())) {
+            return pastaExistente;
         }
 
+        String nomeAntigo = pastaExistente.getNomePasta();
+
+        // 2. Renomeia o diretório físico PRIMEIRO
+        Path caminhoAntigo = Paths.get(pastaExistente.getCaminhoCompleto());
+        Path caminhoPai = caminhoAntigo.getParent();
+        Path novoCaminho = caminhoPai.resolve(pastaAtualizada.getNomePasta());
+
+        try {
+            if (Files.exists(caminhoAntigo)) {
+                Files.move(caminhoAntigo, novoCaminho);
+            }
+        } catch (IOException e) {
+            System.err.println("Erro ao renomear a pasta física de '" + nomeAntigo + "' para '" + pastaAtualizada.getNomePasta() + "': " + e.getMessage());
+            throw new IOException("Falha ao renomear o diretório físico. A transação será revertida.", e);
+        }
+
+        // 3. Atualiza os caminhos no banco de dados, começando pelo pai
+        pastaExistente.setNomePasta(pastaAtualizada.getNomePasta());
+        pastaExistente.setCaminhoCompleto(novoCaminho.toString());
+
+        // 4. Inicia a atualização recursiva dos filhos no banco de dados
+        atualizarCaminhos(pastaExistente);
+
+        // O @Transactional garante que todas as alterações (inclusive dos filhos)
+        // sejam salvas de uma vez.
         return pastaRepository.save(pastaExistente);
+    }
+
+    /**
+     * ✅ Método auxiliar recursivo. Agora ele só precisa atualizar o caminho no banco de dados,
+     * pois o diretório físico já foi renomeado de forma atômica no método principal.
+     */
+    private void atualizarCaminhos(Pasta pasta) {
+        // Atualiza os caminhos das subpastas
+        for (Pasta subpasta : pasta.getSubpastas()) {
+            Path novoCaminho = Paths.get(pasta.getCaminhoCompleto()).resolve(subpasta.getNomePasta());
+            subpasta.setCaminhoCompleto(novoCaminho.toString());
+            // O `save` é desnecessário aqui, pois o @Transactional fará o "flush" no final
+            // mas é bom para ilustrar a intenção.
+            pastaRepository.save(subpasta);
+
+            // Chama a si mesmo para as subpastas
+            atualizarCaminhos(subpasta);
+        }
+
+        // Atualiza os caminhos dos arquivos
+        for (Arquivo arquivo : pasta.getArquivos()) {
+            Path novoCaminho = Paths.get(pasta.getCaminhoCompleto()).resolve(arquivo.getNomeArquivo());
+            arquivo.setCaminhoArmazenamento(novoCaminho.toString());
+            // O `save` é desnecessário aqui, pois o @Transactional fará o "flush" no final
+            arquivoRepository.save(arquivo);
+        }
     }
 
     /**
@@ -344,6 +430,136 @@ public class PastaService {
         }
     }
 
+    // ----UPLOAD DE PASTA E ARQUIVOS------
+
+
+    @Transactional
+    public void uploadDiretorioComArquivos(MultipartFile[] files, Long pastaPaiId, Usuario usuario) throws IOException {
+        if (files == null || files.length == 0) {
+            throw new IllegalArgumentException("Nenhum arquivo para upload.");
+        }
+
+        // 1. Encontra a pasta pai
+        Pasta pastaPai = pastaRepository.findById(pastaPaiId)
+                .orElseThrow(() -> new EntityNotFoundException("Pasta pai não encontrada."));
+
+        // 2. Extrai o nome da pasta raiz do upload a partir do primeiro arquivo
+        String caminhoRelativoPrimeiroArquivo = files[0].getOriginalFilename();
+        Path caminhoRaiz = Paths.get(caminhoRelativoPrimeiroArquivo);
+        String nomePastaRaiz = caminhoRaiz.getName(0).toString();
+
+        // 3. Encontra ou cria a pasta raiz do upload no banco de dados
+        Pasta pastaRaizUpload = encontrarOuCriarPastaAninhada(pastaPai, nomePastaRaiz, usuario);
+
+        // 4. Itera sobre cada arquivo e salva na estrutura correta
+        for (MultipartFile file : files) {
+            String caminhoRelativoCompleto = file.getOriginalFilename();
+            if (caminhoRelativoCompleto == null || caminhoRelativoCompleto.isEmpty()) {
+                continue;
+            }
+
+            Path caminhoDoArquivo = Paths.get(caminhoRelativoCompleto);
+            String nomeArquivo = caminhoDoArquivo.getFileName().toString();
+            Path caminhoPastaRelativo = caminhoDoArquivo.getParent();
+
+            // ✅ CORREÇÃO FINAL: Cria um loop seguro para navegar pela hierarquia de pastas.
+            Pasta pastaParaSalvarArquivo = pastaRaizUpload;
+            if (caminhoPastaRelativo != null) {
+                // Itera sobre as partes do caminho, começando da segunda parte (índice 1)
+                for (int i = 1; i < caminhoPastaRelativo.getNameCount(); i++) {
+                    String nomeSubpasta = caminhoPastaRelativo.getName(i).toString();
+                    pastaParaSalvarArquivo = encontrarOuCriarPastaAninhada(pastaParaSalvarArquivo, nomeSubpasta, usuario);
+                }
+            }
+
+            // Salva o arquivo no sistema de arquivos e no banco de dados.
+            salvarArquivo(file, pastaParaSalvarArquivo, nomeArquivo, usuario);
+        }
+    }
+
+    /**
+     * ✅ Sanitiza o nome do arquivo para evitar problemas com caracteres inválidos no Windows.
+     */
+    private String sanitizarNomeArquivo(String nomeArquivo) {
+        // Substitui caracteres inválidos por "_"
+        return nomeArquivo.replaceAll("[\\\\/:*?\"<>|]", "_");
+    }
+
+    /**
+     * ✅ Encontra ou cria a pasta correta para o arquivo.
+     */
+    private Pasta encontrarPastaParaArquivo(Pasta pastaPai, Path caminhoPastaRelativo, Usuario usuario) {
+        Pasta pastaAtual = pastaPai;
+
+        if (caminhoPastaRelativo != null) {
+            for (Path parteDoCaminho : caminhoPastaRelativo) {
+                pastaAtual = encontrarOuCriarPastaAninhada(pastaAtual, sanitizarNomeArquivo(parteDoCaminho.toString()), usuario);
+            }
+        }
+        return pastaAtual;
+    }
+
+    /**
+     * ✅ Salva um único arquivo no sistema de arquivos e no banco.
+     */
+    private void salvarArquivo(MultipartFile file, Pasta pastaParaSalvar, String nomeArquivo, Usuario usuario) throws IOException {
+        Path caminhoFisicoCompleto = Paths.get(pastaParaSalvar.getCaminhoCompleto()).resolve(nomeArquivo);
+
+        // Garante que a pasta existe antes de salvar
+        Files.createDirectories(caminhoFisicoCompleto.getParent());
+
+        try (InputStream in = file.getInputStream()) {
+            Files.copy(in, caminhoFisicoCompleto, StandardCopyOption.REPLACE_EXISTING);
+        }
+
+        // Salva a entidade do arquivo no banco
+        Arquivo novoArquivo = new Arquivo();
+        novoArquivo.setNomeArquivo(nomeArquivo);
+        novoArquivo.setCaminhoArmazenamento(caminhoFisicoCompleto.toString());
+        novoArquivo.setTamanhoBytes(file.getSize());
+        novoArquivo.setDataUpload(LocalDateTime.now());
+        novoArquivo.setPasta(pastaParaSalvar);
+        novoArquivo.setCriadoPor(usuario);
+
+        arquivoRepository.save(novoArquivo);
+    }
+
+    /**
+     * ✅ Encontra ou cria uma subpasta no banco e no sistema de arquivos.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    private Pasta encontrarOuCriarPastaAninhada(Pasta pastaPai, String nomeSubpasta, Usuario usuario) {
+        Optional<Pasta> subpastaOpt = pastaRepository.findByPastaPaiAndNomePasta(pastaPai, nomeSubpasta);
+        if (subpastaOpt.isPresent()) {
+            return subpastaOpt.get();
+        }
+
+        Pasta novaPasta = new Pasta();
+        novaPasta.setNomePasta(nomeSubpasta);
+        novaPasta.setPastaPai(pastaPai);
+        novaPasta.setDataCriacao(LocalDateTime.now());
+        novaPasta.setCriadoPor(usuario);
+
+        Path caminhoCompleto = Paths.get(pastaPai.getCaminhoCompleto(), nomeSubpasta);
+        novaPasta.setCaminhoCompleto(caminhoCompleto.toString());
+
+        try {
+            Files.createDirectories(caminhoCompleto);
+        } catch (IOException e) {
+            throw new RuntimeException("Falha ao criar o diretório físico para a subpasta.", e);
+        }
+
+        return pastaRepository.save(novaPasta);
+    }
+
+// ---UPLOAD DE PASTA E ARQUIVOS----------
+
+
+
+
+
+
+
     // Método auxiliar para deletar somente o conteúdo da pasta, não a pasta em si.
     private void deletarConteudoPasta(Pasta pasta) {
 
@@ -432,6 +648,33 @@ public class PastaService {
     }
 
 
+    // Métodos auxiliares de permissão
+    private boolean podeAcessarPasta(Pasta pasta, Usuario usuario) {
+        if (usuario.getRoles().stream().anyMatch(role -> role.getNome().equals("ADMIN"))) {
+            return true;
+        }
+        if (pasta == null) {
+            return false;
+        }
+        if (pasta.getUsuariosComPermissao().contains(usuario)) {
+            return true;
+        }
+        if (pasta.getPastaPai() != null) {
+            return podeAcessarPasta(pasta.getPastaPai(), usuario);
+        }
+        if (usuario.getPastasPrincipaisAcessadas().contains(pasta)) {
+            return true;
+        }
+        return false;
+    }
+
+    private void verificarAcessoEPermitir(Pasta pasta, Usuario usuario) throws AccessDeniedException {
+        if (!podeAcessarPasta(pasta, usuario)) {
+            throw new AccessDeniedException("Você não tem permissão para acessar esta pasta.");
+        }
+    }
+
+
     //Métodos para testes locais apagar depois
     /**
      * ✅ MÉTODO DE TESTE TEMPORÁRIO E DEFINITIVO
@@ -464,6 +707,8 @@ public class PastaService {
 
         System.out.println("--- Fim do Teste ---");
     }
+
+
 
 
 }

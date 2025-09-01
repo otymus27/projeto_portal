@@ -5,6 +5,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
@@ -32,4 +34,10 @@ public interface PastaRepository extends JpaRepository<Pasta, Long> {
     // Método para buscar arquivos pelo nome (ou parte dele)
     Page<Pasta> findByNomePastaContainingIgnoreCase(String nomePasta, Pageable pageable);
 
+    // No seu PastaRepository.java
+
+    @Query("SELECT DISTINCT p FROM Pasta p LEFT JOIN FETCH p.subpastas sp LEFT JOIN FETCH p.arquivos a WHERE p.id = :id")
+    Optional<Pasta> findByIdWithChildrenAndFiles(@Param("id") Long id);
+
+    Optional<Pasta> findByPastaPaiAndNomePasta(Pasta pastaPai, String nomeSubpasta);
 }

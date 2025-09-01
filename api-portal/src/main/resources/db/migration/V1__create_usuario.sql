@@ -23,13 +23,15 @@ CREATE TABLE IF NOT EXISTS tb_usuarios_roles (
 
 -- Tabela de Pastas
 CREATE TABLE IF NOT EXISTS tb_pasta (
-  id BIGINT AUTO_INCREMENT PRIMARY KEY,
-  nome_pasta VARCHAR(255) NOT NULL,
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    nome_pasta VARCHAR(255) NOT NULL,
     caminho_completo VARCHAR(255) NOT NULL,
     data_criacao DATETIME(6) NOT NULL,
     pasta_pai_id BIGINT,
-    CONSTRAINT fk_subpastas_pasta_pai FOREIGN KEY (pasta_pai_id) REFERENCES tb_pasta (id)
-);
+    criado_por_id BIGINT,
+    CONSTRAINT fk_subpastas_pasta_pai FOREIGN KEY (pasta_pai_id) REFERENCES tb_pasta (id),
+    CONSTRAINT fk_pastas_usuarios FOREIGN KEY (criado_por_id) REFERENCES tb_usuarios (id)
+    );
 
 -- Tabela de Arquivos
 CREATE TABLE IF NOT EXISTS tb_arquivo (
@@ -80,12 +82,12 @@ INSERT INTO tb_usuarios_roles (user_id, role_id) VALUES
 
 -- As pastas principais estão associadas a um setor.
 -- Pastas filhas (subpastas) terão 'pasta_pai_id' mas 'setor_id' nulo.
-INSERT INTO tb_pasta (nome_pasta, caminho_completo, data_criacao, pasta_pai_id) VALUES
-    ('Relatorios-Financeiros', '/Financeiro/Relatorios-Financeiros', NOW(), NULL),
-    ('Campanhas-2025', '/Marketing/Campanhas-2025', NOW(), NULL),
-    ('Docs-RH', '/RH/Docs-RH', NOW(), NULL),
-    ('Projetos-TI', '/TI/Projetos-TI', NOW(), NULL),
-    ('Contratos', '/Juridico/Contratos', NOW(), NULL);
+INSERT INTO tb_pasta (nome_pasta, caminho_completo, data_criacao, pasta_pai_id, criado_por_id) VALUES
+    ('Relatorios-Financeiros', '/Financeiro/Relatorios-Financeiros', NOW(), NULL, 1),
+    ('Campanhas-2025', '/Marketing/Campanhas-2025', NOW(), NULL, 1),
+    ('Docs-RH', '/RH/Docs-RH', NOW(), NULL, 1),
+    ('Projetos-TI', '/TI/Projetos-TI', NOW(), NULL, 1),
+    ('Contratos', '/Juridico/Contratos', NOW(), NULL, 1);
 
 -- =========================
 -- SUBPASTAS

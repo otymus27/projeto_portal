@@ -41,6 +41,11 @@ public class Pasta {
     @Column(name = "data_criacao", nullable = false)
     private LocalDateTime dataCriacao;
 
+    // Dentro de Pasta.java, logo após data_criacao
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "criado_por_id")
+    private Usuario criadoPor;
+
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "tb_permissao_pasta",
