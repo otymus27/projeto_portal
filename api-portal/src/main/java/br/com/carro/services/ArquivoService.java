@@ -80,6 +80,53 @@ public class ArquivoService {
         return ArquivoDTO.fromEntity(arquivoRepository.save(arquivo));
     }
 
+    //--- MÉTODO PARA MOVER UM ARQUIVO-----
+
+    @Transactional
+    public ArquivoDTO moverArquivo(Long arquivoId, Long pastaDestinoId, Usuario usuario) throws IOException {
+        // 1. Obtém o arquivo de origem e a pasta de destino, verificando as permissões do usuário
+        Arquivo arquivoParaMover = getArquivoComAcesso(arquivoId, usuario);
+        Pasta pastaDestino = getPastaComAcesso(pastaDestinoId, usuario);
+
+        // 2. Define o caminho físico de origem e de destino
+        Path caminhoOrigem = Paths.get(arquivoParaMover.getCaminhoArmazenamento());
+
+        // 3. Move o arquivo fisicamente, lidando com conflitos de nome
+        String novoNome = moverArquivoFisicamente(caminhoOrigem, pastaDestino, arquivoParaMover.getNomeArquivo());
+
+        // 4. Atualiza os dados do arquivo no banco de dados
+        arquivoParaMover.setPasta(pastaDestino);
+        arquivoParaMover.setNomeArquivo(novoNome);
+        arquivoParaMover.setCaminhoArmazenamento(Paths.get(pastaDestino.getCaminhoCompleto(), novoNome).toString());
+
+        // 5. Salva a atualização e retorna o DTO
+        Arquivo arquivoAtualizado = arquivoRepository.save(arquivoParaMover);
+
+        return ArquivoDTO.fromEntity(arquivoAtualizado);
+    }
+
+    //--- Método auxiliar para mover o arquivo fisicamente e lidar com renomeação
+    private String moverArquivoFisicamente(Path caminhoOrigem, Pasta pastaDestino, String nomeArquivoOriginal) throws IOException {
+        Path caminhoDestino = Paths.get(pastaDestino.getCaminhoCompleto(), nomeArquivoOriginal);
+        String nomeArquivoFinal = nomeArquivoOriginal;
+
+        try {
+            Files.move(caminhoOrigem, caminhoDestino, StandardCopyOption.REPLACE_EXISTING);
+        } catch (FileAlreadyExistsException e) {
+            // Se o arquivo já existe na pasta de destino, renomeia para evitar conflito
+            nomeArquivoFinal = UUID.randomUUID().toString() + "_" + nomeArquivoOriginal;
+            caminhoDestino = Paths.get(pastaDestino.getCaminhoCompleto(), nomeArquivoFinal);
+            Files.move(caminhoOrigem, caminhoDestino, StandardCopyOption.REPLACE_EXISTING);
+        }
+
+        return nomeArquivoFinal;
+    }
+
+
+    //--- FIM DO MÉTODO PARA MOVER UM ARQUIVO-----
+
+
+
     // --- NOVO MÉTODO SUBSTITUIR ---
     @Transactional
     public ArquivoDTO substituirArquivo(Long id, MultipartFile novoArquivo, Usuario usuario) throws IOException {

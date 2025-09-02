@@ -2,6 +2,7 @@ package br.com.carro.controllers;
 
 import br.com.carro.autenticacao.JpaUserDetailsService;
 import br.com.carro.entities.DTO.PastaDTO;
+import br.com.carro.entities.DTO.PastaMoverDTO;
 import br.com.carro.entities.DTO.PastaRequestDTO;
 import br.com.carro.entities.Pasta;
 import br.com.carro.entities.Usuario.Usuario;
@@ -264,6 +265,33 @@ public class PastaController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
         }
     }
+
+    // ---- ENDPOINT PARA MOVER PASTA PARA OUTRO LOCAL
+
+    @PutMapping("/mover/{pastaId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')") // Ajuste a role conforme necessário
+    public ResponseEntity<?> moverPasta(
+            @PathVariable Long pastaId,
+            @RequestBody PastaMoverDTO pastaMoverDTO,
+            @AuthenticationPrincipal Jwt jwt) {
+        try {
+            Usuario usuarioLogado = (Usuario) userDetailsService.loadUserByUsername(jwt.getSubject());
+            PastaDTO pastaAtualizada = pastaService.moverPasta(pastaId, pastaMoverDTO.pastaDestinoId(), usuarioLogado);
+            return ResponseEntity.ok(pastaAtualizada);
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+        } catch (AccessDeniedException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        } catch (IOException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Erro ao mover a pasta: " + e.getMessage());
+        }
+    }
+
+
+
+    // ---- FIM ENDPOINT MOVER PASTA PARA OUTRO LOCAL
 
 
     //Métodos para testes apagar depois

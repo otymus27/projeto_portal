@@ -2,6 +2,7 @@ package br.com.carro.controllers;
 
 import br.com.carro.entities.Arquivo;
 import br.com.carro.entities.DTO.ArquivoDTO;
+import br.com.carro.entities.DTO.ArquivoMoverDTO;
 import br.com.carro.entities.DTO.ArquivoUpdateDTO;
 import br.com.carro.entities.Usuario.Usuario;
 import br.com.carro.services.ArquivoService;
@@ -220,6 +221,30 @@ public class ArquivoController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
+
+    //--- ENDPOINT PARA MOVER UM ARQUIVO-----
+
+    @PutMapping("/mover/{arquivoId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE', 'BASIC')") // Adicione a anotação de segurança
+    public ResponseEntity<String> moverArquivo(
+            @PathVariable Long arquivoId,
+            @RequestBody ArquivoMoverDTO moverArquivoDTO,
+            @AuthenticationPrincipal Jwt jwt) { // Injete o objeto Jwt
+        try {
+            Usuario usuarioLogado = (Usuario) userDetailsService.loadUserByUsername(jwt.getSubject()); // Busque o usuário
+            arquivoService.moverArquivo(arquivoId, moverArquivoDTO.getPastaDestinoId(), usuarioLogado);
+            return ResponseEntity.ok("Arquivo movido com sucesso.");
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+        } catch (AccessDeniedException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Erro ao mover arquivo: " + e.getMessage());
+        }
+    }
+
+
+    //--- ENDPOINT PARA MOVER UM ARQUIVO-----
 
     /**
      * Exclui um arquivo pelo seu ID.

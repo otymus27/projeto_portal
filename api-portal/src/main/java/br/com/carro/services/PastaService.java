@@ -552,8 +552,70 @@ public class PastaService {
         return pastaRepository.save(novaPasta);
     }
 
-// ---UPLOAD DE PASTA E ARQUIVOS----------
+// ---FIM UPLOAD DE PASTA E ARQUIVOS----------
 
+    // ---MOVER PASTA PARA OUTRO LOCAL
+
+    @Transactional
+    public PastaDTO moverPasta(Long pastaId, Long pastaDestinoId, Usuario usuario) throws IOException {
+        // 1. Obtém a pasta de origem e verifica as permissões
+        Pasta pastaParaMover = getPastaComAcesso(pastaId, usuario);
+
+        // 2. Obtém a pasta de destino e verifica as permissões
+        Pasta pastaDestino = getPastaComAcesso(pastaDestinoId, usuario);
+
+        // 3. Verifica se a pasta de destino não é a pasta de origem ou uma subpasta dela
+        if (isDescendantOf(pastaDestino, pastaParaMover)) {
+            throw new IllegalArgumentException("Não é possível mover uma pasta para dentro de uma de suas subpastas.");
+        }
+
+        // 4. Define os caminhos físico da pasta de origem e de destino
+        Path caminhoOrigem = Paths.get(pastaParaMover.getCaminhoCompleto());
+        Path caminhoDestino = Paths.get(pastaDestino.getCaminhoCompleto(), pastaParaMover.getNomePasta());
+
+        // 5. Mover fisicamente a pasta
+        Files.move(caminhoOrigem, caminhoDestino, StandardCopyOption.REPLACE_EXISTING);
+
+        // 6. Atualiza a referência da pasta pai no banco de dados e o novo caminho
+        pastaParaMover.setPastaPai(pastaDestino);
+        pastaParaMover.setCaminhoCompleto(caminhoDestino.toString());
+
+        // 7. Salva a atualização no banco de dados
+        Pasta pastaAtualizada = pastaRepository.save(pastaParaMover);
+
+        // Opcional: Atualizar caminhos de subpastas e arquivos, se necessário
+        // (Isso pode ser complexo e depender de como você modelou o caminho)
+
+        return PastaDTO.fromEntity(pastaAtualizada);
+    }
+
+    //--- Métodos Auxiliares ---
+
+    // Método para obter a pasta com verificação de acesso
+    private Pasta getPastaComAcesso(Long pastaId, Usuario usuario) throws AccessDeniedException {
+        Pasta pasta = pastaRepository.findById(pastaId)
+                .orElseThrow(() -> new EntityNotFoundException("Pasta não encontrada com o ID: " + pastaId));
+        verificarAcessoEPermitir(pasta, usuario);
+        return pasta;
+    }
+
+    // Método para verificar se uma pasta é descendente de outra
+    private boolean isDescendantOf(Pasta pasta, Pasta ancestral) {
+        Pasta current = pasta;
+        while (current != null) {
+            if (current.equals(ancestral)) {
+                return true;
+            }
+            current = current.getPastaPai();
+        }
+        return false;
+    }
+
+
+
+
+
+    // ---FIM MOVER PASTA PARA OUTRO LOCAL
 
 
 
