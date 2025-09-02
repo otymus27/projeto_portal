@@ -1,6 +1,7 @@
 package br.com.carro.controllers;
 
 import br.com.carro.autenticacao.JpaUserDetailsService;
+import br.com.carro.entities.DTO.PastaCopiarDTO;
 import br.com.carro.entities.DTO.PastaDTO;
 import br.com.carro.entities.DTO.PastaMoverDTO;
 import br.com.carro.entities.DTO.PastaRequestDTO;
@@ -289,9 +290,33 @@ public class PastaController {
         }
     }
 
-
-
     // ---- FIM ENDPOINT MOVER PASTA PARA OUTRO LOCAL
+
+    // ---- ENDPOINT PARA COPIAR PASTA PARA OUTRO LOCAL
+
+    @PostMapping("/copiar/{pastaId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')") // Ajuste a role se necessário
+    public ResponseEntity<?> copiarPasta(
+            @PathVariable Long pastaId,
+            @RequestBody PastaCopiarDTO dto,
+            @AuthenticationPrincipal Jwt jwt) {
+        try {
+            Usuario usuarioLogado = (Usuario) userDetailsService.loadUserByUsername(jwt.getSubject());
+            PastaDTO pastaCopiada = pastaService.copiarPasta(pastaId, dto.pastaDestinoId(), usuarioLogado);
+            return ResponseEntity.status(HttpStatus.CREATED).body(pastaCopiada);
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+        } catch (AccessDeniedException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
+        } catch (IOException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Erro ao copiar a pasta: " + e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Erro interno no servidor: " + e.getMessage());
+        }
+    }
+
+    // --- FIM ENDPOINT COPIAR ARQUIVO PARA PASTA
+
 
 
     //Métodos para testes apagar depois

@@ -2,6 +2,7 @@ package br.com.carro.repositories;
 
 
 import br.com.carro.entities.Arquivo;
+import br.com.carro.entities.Pasta;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -10,8 +11,10 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.lang.ScopedValue;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 @Repository
 public interface ArquivoRepository extends JpaRepository<Arquivo, Long> {
@@ -29,4 +32,7 @@ public interface ArquivoRepository extends JpaRepository<Arquivo, Long> {
     @Query("DELETE FROM Arquivo a WHERE a.pasta.id = :pastaId")
     void deleteAllByPastaId(@Param("pastaId") Long pastaId);
 
+    //<T> ScopedValue<T> findByCaminhoArmazenamento(String string);
+
+    List<Arquivo> findByPasta(Pasta pasta);
 }

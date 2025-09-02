@@ -1,6 +1,7 @@
 package br.com.carro.controllers;
 
 import br.com.carro.entities.Arquivo;
+import br.com.carro.entities.DTO.ArquivoCopiarDTO;
 import br.com.carro.entities.DTO.ArquivoDTO;
 import br.com.carro.entities.DTO.ArquivoMoverDTO;
 import br.com.carro.entities.DTO.ArquivoUpdateDTO;
@@ -242,9 +243,32 @@ public class ArquivoController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Erro ao mover arquivo: " + e.getMessage());
         }
     }
+    //--- FIM ENDPOINT PARA MOVER UM ARQUIVO-----
 
 
-    //--- ENDPOINT PARA MOVER UM ARQUIVO-----
+    //--- ENDPOINT PARA COPIAR UM ARQUIVO----
+    @PostMapping("/copiar/{arquivoId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')") // Ajuste a role se necessário
+    public ResponseEntity<?> copiarArquivo(
+            @PathVariable Long arquivoId,
+            @RequestBody ArquivoCopiarDTO dto,
+            @AuthenticationPrincipal Jwt jwt) {
+        try {
+            Usuario usuarioLogado = (Usuario) userDetailsService.loadUserByUsername(jwt.getSubject());
+            ArquivoDTO arquivoCopiado = arquivoService.copiarArquivo(arquivoId, dto.pastaDestinoId(), usuarioLogado);
+            return ResponseEntity.status(HttpStatus.CREATED).body(arquivoCopiado);
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+        } catch (AccessDeniedException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
+        } catch (IOException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Erro ao copiar arquivo: " + e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Erro interno no servidor: " + e.getMessage());
+        }
+    }
+
+    //---FIM DO ENDPOINT COPIAR ARQUIVO PARA PASTA
 
     /**
      * Exclui um arquivo pelo seu ID.

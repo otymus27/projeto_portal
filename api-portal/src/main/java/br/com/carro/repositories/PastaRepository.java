@@ -1,5 +1,6 @@
 package br.com.carro.repositories;
 
+import br.com.carro.entities.Arquivo;
 import br.com.carro.entities.Pasta;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -8,9 +9,11 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.lang.ScopedValue;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Stream;
 
 public interface PastaRepository extends JpaRepository<Pasta, Long> {
 
@@ -40,4 +43,10 @@ public interface PastaRepository extends JpaRepository<Pasta, Long> {
     Optional<Pasta> findByIdWithChildrenAndFiles(@Param("id") Long id);
 
     Optional<Pasta> findByPastaPaiAndNomePasta(Pasta pastaPai, String nomeSubpasta);
+
+    // Ensure this method exists and is correctly defined
+    Optional<Pasta> findByCaminhoCompleto(String caminhoCompleto);
+
+    List<Pasta> findByPastaPai(Pasta pastaPai);
+
 }

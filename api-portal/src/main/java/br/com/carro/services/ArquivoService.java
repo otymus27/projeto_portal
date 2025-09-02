@@ -81,7 +81,6 @@ public class ArquivoService {
     }
 
     //--- MÉTODO PARA MOVER UM ARQUIVO-----
-
     @Transactional
     public ArquivoDTO moverArquivo(Long arquivoId, Long pastaDestinoId, Usuario usuario) throws IOException {
         // 1. Obtém o arquivo de origem e a pasta de destino, verificando as permissões do usuário
@@ -103,6 +102,41 @@ public class ArquivoService {
         Arquivo arquivoAtualizado = arquivoRepository.save(arquivoParaMover);
 
         return ArquivoDTO.fromEntity(arquivoAtualizado);
+    }
+
+    //--- MÉTODO PARA COPIAR UM ARQUIVO-----
+    @Transactional
+    public ArquivoDTO copiarArquivo(Long arquivoId, Long pastaDestinoId, Usuario usuario) throws IOException {
+        // 1. Obtém o arquivo de origem e verifica as permissões do usuário para ler
+        Arquivo arquivoParaCopiar = getArquivoComAcesso(arquivoId, usuario);
+
+        // 2. Obtém a pasta de destino e verifica as permissões do usuário para escrever
+        Pasta pastaDestino = getPastaComAcesso(pastaDestinoId, usuario);
+
+        // 3. Define o caminho físico de destino para o novo arquivo
+        Path pastaDestinoPath = Paths.get(pastaDestino.getCaminhoCompleto());
+        Files.createDirectories(pastaDestinoPath); // Garante que a pasta de destino existe
+
+        // 4. Cria um novo nome único para o arquivo copiado para evitar conflitos
+        String nomeOriginal = arquivoParaCopiar.getNomeArquivo();
+        String novoNomeUnico = UUID.randomUUID().toString() + "_" + nomeOriginal;
+        Path novoCaminhoFisico = pastaDestinoPath.resolve(novoNomeUnico);
+
+        // 5. Copia o arquivo fisicamente para o novo destino
+        Files.copy(Paths.get(arquivoParaCopiar.getCaminhoArmazenamento()), novoCaminhoFisico, StandardCopyOption.REPLACE_EXISTING);
+
+        // 6. Cria e salva um NOVO registro de Arquivo no banco de dados
+        Arquivo novoArquivo = new Arquivo();
+        novoArquivo.setNomeArquivo(nomeOriginal); // Mantém o nome original no metadado
+        novoArquivo.setCaminhoArmazenamento(novoCaminhoFisico.toString());
+        novoArquivo.setTamanhoBytes(arquivoParaCopiar.getTamanhoBytes());
+        novoArquivo.setDataUpload(LocalDateTime.now());
+        novoArquivo.setPasta(pastaDestino); // Vincula à nova pasta
+        novoArquivo.setCriadoPor(usuario);
+
+        Arquivo arquivoSalvo = arquivoRepository.save(novoArquivo);
+
+        return ArquivoDTO.fromEntity(arquivoSalvo);
     }
 
     //--- Método auxiliar para mover o arquivo fisicamente e lidar com renomeação

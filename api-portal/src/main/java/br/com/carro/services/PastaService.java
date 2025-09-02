@@ -27,6 +27,7 @@ import java.nio.file.*;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -611,11 +612,107 @@ public class PastaService {
         return false;
     }
 
-
-
-
-
     // ---FIM MOVER PASTA PARA OUTRO LOCAL
+
+
+    // --- COPIAR PASTA PARA OUTRA PASTA
+
+    @Transactional
+    public PastaDTO copiarPasta(Long pastaId, Long pastaDestinoId, Usuario usuario) throws IOException {
+        // 1. Obtém a pasta de origem e a pasta de destino
+        Pasta pastaParaCopiar = pastaRepository.findById(pastaId)
+                .orElseThrow(() -> new EntityNotFoundException("Pasta de origem não encontrada."));
+        Pasta pastaDestino = pastaRepository.findById(pastaDestinoId)
+                .orElseThrow(() -> new EntityNotFoundException("Pasta de destino não encontrada."));
+
+        // 2. Cria a nova pasta no banco de dados e no disco
+        Pasta novaPastaRaiz = new Pasta();
+        novaPastaRaiz.setNomePasta(pastaParaCopiar.getNomePasta());
+        novaPastaRaiz.setCriadoPor(usuario);
+        novaPastaRaiz.setCaminhoCompleto(Paths.get(pastaDestino.getCaminhoCompleto(), pastaParaCopiar.getNomePasta()).toString());
+        novaPastaRaiz.setPastaPai(pastaDestino);
+        novaPastaRaiz.setDataCriacao(LocalDateTime.now());
+        Pasta pastaSalva = pastaRepository.save(novaPastaRaiz);
+
+        // 3. Inicia a cópia recursiva
+        copiarConteudo(pastaParaCopiar, pastaSalva, usuario);
+
+        return PastaDTO.fromEntity(pastaSalva);
+    }
+
+    // Método auxiliar recursivo
+    private void copiarConteudo(Pasta pastaOrigem, Pasta pastaDestino, Usuario usuario) throws IOException {
+        // 1. Copia arquivos
+        List<Arquivo> arquivos = arquivoRepository.findByPasta(pastaOrigem);
+
+        for (Arquivo arquivoOrigem : arquivos) {
+            // --- LOGS PARA DEBUG INÍCIO ---
+            System.out.println("DEBUG: Iniciando cópia do arquivo: " + arquivoOrigem.getNomeArquivo());
+            Path caminhoOrigem = Paths.get(arquivoOrigem.getCaminhoArmazenamento());
+            Path caminhoDestino = Paths.get(pastaDestino.getCaminhoCompleto(), arquivoOrigem.getNomeArquivo());
+            System.out.println("DEBUG: Caminho de Origem: " + caminhoOrigem.toAbsolutePath());
+            System.out.println("DEBUG: Caminho de Destino: " + caminhoDestino.toAbsolutePath());
+            System.out.println("DEBUG: Arquivo de Origem existe? " + Files.exists(caminhoOrigem));
+            // --- LOGS PARA DEBUG FIM ---
+
+            try {
+                // ADICIONE ESTA LINHA: Garante que a pasta de destino do arquivo exista.
+                Files.createDirectories(caminhoDestino.getParent());
+
+                // Garante que o arquivo de destino seja excluído se ele já existir e estiver acessível
+                if (Files.exists(caminhoDestino)) {
+                    System.out.println("DEBUG: Arquivo de destino já existe. Excluindo...");
+                    Files.deleteIfExists(caminhoDestino);
+                }
+
+                Files.copy(caminhoOrigem, caminhoDestino, StandardCopyOption.REPLACE_EXISTING);
+
+                // Cria um novo registro de arquivo no banco de dados
+                Arquivo novoArquivo = new Arquivo();
+                novoArquivo.setNomeArquivo(arquivoOrigem.getNomeArquivo());
+                novoArquivo.setCaminhoArmazenamento(caminhoDestino.toString());
+                novoArquivo.setTamanhoBytes(arquivoOrigem.getTamanhoBytes());
+                novoArquivo.setDataUpload(LocalDateTime.now());
+                novoArquivo.setPasta(pastaDestino);
+                novoArquivo.setCriadoPor(usuario);
+                arquivoRepository.save(novoArquivo);
+
+            } catch (IOException e) {
+                // MUDE A MENSAGEM DE ERRO para obter o detalhe
+                System.err.println("ERRO CRÍTICO: Falha na operação de cópia do arquivo.");
+                e.printStackTrace(); // Isso vai imprimir a stack trace completa
+                throw new RuntimeException("Erro ao copiar o arquivo: " + arquivoOrigem.getNomeArquivo() + " - " + e.getMessage(), e);
+            }
+        }
+
+        // 2. Copia subpastas (recursivamente)
+        List<Pasta> subpastas = pastaRepository.findByPastaPai(pastaOrigem);
+
+        for (Pasta subpastaOrigem : subpastas) {
+            try {
+                // Cria nova subpasta no disco
+                Path caminhoDestinoSubpasta = Paths.get(pastaDestino.getCaminhoCompleto(), subpastaOrigem.getNomePasta());
+                Files.createDirectories(caminhoDestinoSubpasta);
+
+                // Cria novo registro de subpasta no banco de dados
+                Pasta novaSubpasta = new Pasta();
+                novaSubpasta.setNomePasta(subpastaOrigem.getNomePasta());
+                novaSubpasta.setCriadoPor(usuario);
+                novaSubpasta.setCaminhoCompleto(caminhoDestinoSubpasta.toString());
+                novaSubpasta.setPastaPai(pastaDestino);
+                novaSubpasta.setDataCriacao(LocalDateTime.now());
+                Pasta subpastaSalva = pastaRepository.save(novaSubpasta);
+
+                // Chama a função recursivamente para copiar o conteúdo da subpasta
+                copiarConteudo(subpastaOrigem, subpastaSalva, usuario);
+            } catch (IOException e) {
+                throw new RuntimeException("Erro ao copiar a pasta: " + subpastaOrigem.getNomePasta(), e);
+            }
+        }
+
+    }
+
+    // --- FIM COPIAR PASTA PARA OUTRA PASTA
 
 
 

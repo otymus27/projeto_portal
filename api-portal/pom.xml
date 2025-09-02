@@ -27,7 +27,15 @@
 		<url/>
 	</scm>
 	<properties>
-		<java.version>17</java.version>
+        <!-- Spring Boot version -->
+        <spring-boot.version>3.2.3</spring-boot.version>
+
+        <!-- Configuração Java 23 -->
+        <java.version>23</java.version>
+        <maven.compiler.source>23</maven.compiler.source>
+        <maven.compiler.target>23</maven.compiler.target>
+        <maven.compiler.compilerArgs>--enable-preview</maven.compiler.compilerArgs>
+        <spring-boot.build-image.skip>true</spring-boot.build-image.skip>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -111,11 +119,6 @@
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
 
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-web</artifactId>
-        </dependency>
-
         <!-- Dependencias para gerar relatorios        -->
         <dependency>
             <groupId>org.apache.poi</groupId>
@@ -156,7 +159,8 @@
 					</annotationProcessorPaths>
                     <source>23</source>
                     <target>23</target>
-<!--                   git -->
+                    <compilerArgs>--enable-preview</compilerArgs>
+                    <!--                   git -->
                 </configuration>
 			</plugin>
 			<plugin>
