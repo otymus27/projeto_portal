@@ -435,7 +435,7 @@
 
         logMessage(`Tentando fazer upload da pasta com ${files.length} arquivos para a pasta '${pastaId}'...`);
         try {
-            const response = await fetch(`${API_URL_PASTA}/upload-diretorio?pastaPaiId=${pastaId}`, {
+            const response = await fetch(`${API_URL_PASTA}/upload-diretorio?pastaId=${pastaId}`, {
                 method: 'POST',
                 headers: headers,
                 body: formData
@@ -473,7 +473,7 @@
 
         logMessage(`Tentando substituir a pasta '${pastaId}' com ${files.length} arquivos...`);
         try {
-            const response = await fetch(`${API_URL_PASTA}/substituir-pasta/${pastaId}`, {
+            const response = await fetch(`${API_URL_PASTA}/substituir/${pastaId}`, {
                 method: 'PUT',
                 headers: headers,
                 body: formData
@@ -509,7 +509,7 @@
 
         logMessage(`Tentando substituir o arquivo com ID '${arquivoId}'...`);
         try {
-            const response = await fetch(`${API_URL_ARQUIVO}/substituir-arquivo/${arquivoId}`, {
+            const response = await fetch(`${API_URL_ARQUIVO}/${arquivoId}/substituir`, {
                 method: 'PUT',
                 headers: headers,
                 body: formData
@@ -672,6 +672,42 @@
         }
     }
 
+    async function renomearPasta() {
+    const pastaId = document.getElementById('pastaIdRenomear').value;
+    const novoNome = document.getElementById('novoNomePasta').value;
+    const headers = getHeaders();
+    if (!headers) return;
+    if (!pastaId || !novoNome) {
+        logMessage('Erro: ID da pasta e novo nome são obrigatórios para renomear.');
+        return;
+    }
+
+    const requestBody = {
+        nomePasta: novoNome // Alterado para 'nomePasta'
+    };
+
+    logMessage(`Tentando renomear a pasta com ID '${pastaId}' para '${novoNome}'...`);
+    try {
+        const response = await fetch(`${API_URL_PASTA}/${pastaId}`, {
+            method: 'PATCH',
+            headers: {
+                ...headers,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestBody)
+        });
+        const text = await response.text();
+        if (response.ok) {
+            logMessage(`Sucesso! ${text}`);
+            limparCampos('pastaIdRenomear', 'novoNomePasta');
+        } else {
+            logMessage(`Erro! Status: ${response.status} - ${text}`);
+        }
+    } catch (error) {
+        logMessage(`Erro na requisição: ${error}`);
+    }
+}
+
     async function renomearArquivo() {
         const arquivoId = document.getElementById('arquivoIdRenomear').value;
         const novoNome = document.getElementById('novoNomeArquivo').value;
@@ -688,8 +724,8 @@
 
         logMessage(`Tentando renomear o arquivo com ID '${arquivoId}' para '${novoNome}'...`);
         try {
-            const response = await fetch(`${API_URL_ARQUIVO}/renomear/${arquivoId}`, {
-                method: 'PUT',
+            const response = await fetch(`${API_URL_ARQUIVO}/${arquivoId}`, {
+                method: 'PATCH',
                 headers: {
                     ...headers,
                     'Content-Type': 'application/json'
