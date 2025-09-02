@@ -53,6 +53,12 @@ public class PastaController {
         this.userDetailsService = userDetailsService;
     }
 
+    // Endpoint público para obter as pastas de nível superior
+    @GetMapping("/top-level")
+    public List<Pasta> getPastasTopLevel() {
+        return pastaService.findPastasTopLevel(); // Crie este método no seu serviço
+    }
+
     @GetMapping("/principais")
     @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE', 'BASIC')")
     public ResponseEntity<Page<PastaDTO>> listarPastasPrincipaisDoUsuario(

@@ -123,11 +123,14 @@ public class SecurityConfigurations {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))                 
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(HttpMethod.GET, "/api/pasta/top-level").permitAll()
                     // ✅ Permite OPTIONS para qualquer endpoint
                     .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+
                     .requestMatchers(HttpMethod.POST, "/login").permitAll() // ✅ Permite acesso público ao endpoint de login
                     // ✅ Permite POST para /api/login sem autenticação
                     .requestMatchers(HttpMethod.POST, "/api/login").permitAll()
+
                     .anyRequest().authenticated()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))) // Configura o servidor de recursos OAuth2 para usar JWT

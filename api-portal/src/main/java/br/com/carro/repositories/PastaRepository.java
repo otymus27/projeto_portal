@@ -49,4 +49,11 @@ public interface PastaRepository extends JpaRepository<Pasta, Long> {
 
     List<Pasta> findByPastaPai(Pasta pastaPai);
 
+
+    // Método personalizado para encontrar pastas sem um pai
+    List<Pasta> findByPastaPaiIsNull();
+
+    // Método para encontrar pastas por ID de pasta pai
+    List<Pasta> findByPastaPaiId(Long pastaPaiId);
+
 }

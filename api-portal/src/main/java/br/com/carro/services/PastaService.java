@@ -921,6 +921,24 @@ public class PastaService {
     }
 
 
+    /**
+     * Retorna uma lista de pastas de nível superior, ou seja, aquelas que não têm uma pasta pai.
+     */
+    public List<Pasta> findPastasTopLevel() {
+        return pastaRepository.findByPastaPaiIsNull();
+    }
 
+    /**
+     * Retorna uma lista de subpastas de uma pasta específica, identificada pelo ID da pasta pai.
+     */
+    public List<Pasta> findSubpastasByPastaPaiId(Long pastaPaiId) {
+        return pastaRepository.findByPastaPaiId(pastaPaiId);
+    }
 
+    /**
+     * Retorna uma pasta específica pelo seu ID.
+     */
+    public Optional<Pasta> findById(Long id) {
+        return pastaRepository.findById(id);
+    }
 }
