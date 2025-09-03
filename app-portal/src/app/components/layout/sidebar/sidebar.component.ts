@@ -14,9 +14,8 @@ export class SidebarComponent {
   private authService = inject(AuthService);
 
   isCollapsed = false;
-  showCarrosSubmenu = false;
+  showPastasSubmenu = false;
   showMarcasSubmenu = false;
-  showProprietariosSubmenu = false;
   showUsuariosSubmenu = false;
 
   toggle() {
@@ -24,34 +23,23 @@ export class SidebarComponent {
   }
 
   toggleSubmenu(submenu: string) {
-    if (submenu === 'carros') {
-      this.showCarrosSubmenu = !this.showCarrosSubmenu;
+    if (submenu === 'pastas') {
+      this.showPastasSubmenu = !this.showPastasSubmenu;
       this.showMarcasSubmenu = false;
-      this.showProprietariosSubmenu = false;
       this.showUsuariosSubmenu = false;
     } else if (submenu === 'marcas') {
       this.showMarcasSubmenu = !this.showMarcasSubmenu;
-      this.showCarrosSubmenu = false;
-      this.showProprietariosSubmenu = false;
-      this.showUsuariosSubmenu = false;
-    } else if (submenu === 'proprietarios') {
-      this.showProprietariosSubmenu = !this.showProprietariosSubmenu;
-      this.showCarrosSubmenu = false;
-      this.showMarcasSubmenu = false;
+      this.showPastasSubmenu = false;
       this.showUsuariosSubmenu = false;
     } else if (submenu === 'usuarios') {
       this.showUsuariosSubmenu = !this.showUsuariosSubmenu;
-      this.showCarrosSubmenu = false;
-      this.showProprietariosSubmenu = false;
       this.showMarcasSubmenu = false;
     }
   }
 
   hideAllSubmenus() {
-    this.showCarrosSubmenu = false;
+    this.showPastasSubmenu = false;
     this.showMarcasSubmenu = false;
-    this.showProprietariosSubmenu = false;
-    this.showCarrosSubmenu = false;
   }
 
   // ✅ Método para verificar se o usuário é ADMIN

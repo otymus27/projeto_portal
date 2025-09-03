@@ -5,8 +5,8 @@ import { RouterLink, RouterOutlet } from '@angular/router';
 
 @Component({
   selector: 'app-home',
-  imports: [FooterComponent, HeaderComponent,RouterLink],
+  imports: [FooterComponent, HeaderComponent, RouterLink],
   templateUrl: './home.component.html',
   styleUrl: './home.component.scss',
 })
-export class HomeComponent {}
+export class HomeComponentPublico {}

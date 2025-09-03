@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Lista de Arquivos - Teste</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 30px;
+      }
+      h1 {
+        color: #333;
+      }
+      ul {
+        list-style-type: none;
+        padding-left: 20px;
+      }
+      li {
+        margin: 5px 0;
+      }
+      .diretorio {
+        font-weight: bold;
+        color: #2a7ae2;
+      }
+      .arquivo {
+        color: #333;
+      }
+      button {
+        margin-left: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Lista de Arquivos - Teste</h1>
+
+    <label for="caminho">Caminho da pasta:</label>
+    <input type="text" id="caminho" value="" />
+    <button onclick="listar()">Listar</button>
+
+    <ul id="listaArquivos"></ul>
+
+    <script>
+      const token = "eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJjYXJyby1hcGkiLCJzdWIiOiJhZG1pbiIsImV4cCI6MTc1NjkzODM4NiwiaWF0IjoxNzU2OTAyMzg2LCJyb2xlcyI6WyJBRE1JTiJdfQ.ohIO9ggBfcOKVbg5E-3Il20WNfQqao2dGsi586_W4jo"; // substitua pelo JWT válido
+
+      async function listar() {
+        const caminho = document.getElementById("caminho").value;
+        const lista = document.getElementById("listaArquivos");
+        lista.innerHTML = "";
+
+        try {
+          const response = await fetch(
+            `http://localhost:8082/api/privado/pastas?caminho=${encodeURIComponent(
+              caminho
+            )}`,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            }
+          );
+
+          const itens = await response.json();
+          if (itens.length === 0) {
+            lista.innerHTML = "<li>Nenhum arquivo ou pasta encontrado.</li>";
+            return;
+          }
+
+          // Função recursiva para exibir pastas e arquivos
+          function renderItens(itens, parentUl) {
+            itens.forEach((item) => {
+              const li = document.createElement("li");
+              li.className = item.diretorio ? "diretorio" : "arquivo";
+              li.textContent = item.nomePasta || item.nomeArquivo;
+
+              if (!item.diretorio) {
+                // Botão para download
+                const btnDownload = document.createElement("button");
+                btnDownload.textContent = "Download";
+                btnDownload.onclick = () => baixar(item);
+                li.appendChild(btnDownload);
+              }
+
+              parentUl.appendChild(li);
+
+              // Renderiza recursivamente filhos se houver
+              if (item.filhos && item.filhos.length > 0) {
+                const subUl = document.createElement("ul");
+                renderItens(item.filhos, subUl);
+                li.appendChild(subUl);
+              }
+            });
+          }
+
+          renderItens(itens, lista);
+        } catch (err) {
+          console.error(err);
+          lista.innerHTML = "<li>Erro ao listar arquivos.</li>";
+        }
+      }
+
+      async function baixar(item) {
+        const caminho = item.caminhoArmazenamento
+          ? `${item.caminhoArmazenamento}/${item.nomeArquivo}`
+          : item.nomeArquivo;
+
+        const response = await fetch(
+          `http://localhost:8082/api/privado/pastas/download?caminho=${encodeURIComponent(
+            caminho
+          )}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (!response.ok) {
+          alert("Erro ao baixar arquivo.");
+          return;
+        }
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = item.nomeArquivo;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+      }
+    </script>
+  </body>
+</html>

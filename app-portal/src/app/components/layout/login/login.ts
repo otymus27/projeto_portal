@@ -1,5 +1,5 @@
 import { Component, inject } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, RouterModule } from '@angular/router';
 import { AuthService } from '../../../services/auth.service';
 import { FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
@@ -10,7 +10,13 @@ import { HttpErrorResponse } from '@angular/common/http';
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [FormsModule, CommonModule, MdbFormsModule, MdbRippleModule],
+  imports: [
+    FormsModule,
+    CommonModule,
+    MdbFormsModule,
+    MdbRippleModule,
+    RouterModule,
+  ],
   templateUrl: './../login/login.html',
   styleUrl: './../login/login.scss',
 })

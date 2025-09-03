@@ -1,13 +1,13 @@
 import { TestBed } from '@angular/core/testing';
 
-import { CarroService } from './carro.service';
+import { PastaManagerService } from './pasta-manager.service';
 
-describe('CarroService', () => {
-  let service: CarroService;
+describe('PastaManagerService', () => {
+  let service: PastaManagerService;
 
   beforeEach(() => {
     TestBed.configureTestingModule({});
-    service = TestBed.inject(CarroService);
+    service = TestBed.inject(PastaManagerService);
   });
 
   it('should be created', () => {

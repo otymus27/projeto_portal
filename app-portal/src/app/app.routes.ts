@@ -1,21 +1,21 @@
 import { Routes } from '@angular/router';
 import { Login } from './components/layout/login/login';
 import { Principal } from './components/layout/principal/principal';
-import { ProprietarioComponent } from './components/proprietario/proprietario.component';
 import { MarcaComponent } from './components/marca/marca.component';
-import { CarroComponent } from './components/carro/carro.component';
 
 import { AuthGuard } from './guards/auth.guard';
 import { UsuarioComponent } from './components/usuario/usuario.component';
 import { MarcaComponentRelatorio } from './components/relatorio/marca/relatorio.marca.component';
 import { RedefinicaoSenhaComponent } from './components/redefinicao-senha/redefinicao-senha.component';
-import { HomeComponent } from './components/layout-publico/home/home.component';
+import { HomeComponentPublico } from './components/layout-publico/home/home.component';
 import { ProtocolosComponent } from './components/layout-publico/protocolos/protocolos.component';
+import { HomeComponent } from './components/layout/home/home.component';
+import { PastaComponent } from './components/pasta/pasta.component';
 
 export const routes: Routes = [
   // A rota principal para a página inicial
   { path: '', redirectTo: 'home', pathMatch: 'full' },
-  { path: 'home', component: HomeComponent },
+  { path: 'home', component: HomeComponentPublico },
   // Rota para a lista de pastas de nível superior
   { path: 'protocolos', component: ProtocolosComponent },
   { path: 'protocolos/:caminho', component: ProtocolosComponent },
@@ -49,26 +49,6 @@ export const routes: Routes = [
         data: { roles: ['ADMIN', 'BASIC', 'GERENTE'] }, // ✅ Todos os perfis podem acessar
       },
 
-      // Rotas com submenus para Carros
-      {
-        path: 'carros',
-        children: [
-          // Rota para a lista de carros (Consulta)
-          { path: '', component: CarroComponent },
-          // Rota para gerenciar um carro (adição/edição)
-          { path: 'gerenciar', component: CarroComponent },
-        ],
-      },
-
-      // Rotas com submenus para Proprietarios
-      {
-        path: 'proprietarios',
-        children: [
-          { path: '', component: ProprietarioComponent },
-          { path: 'gerenciar', component: ProprietarioComponent },
-        ],
-      },
-
       // Rotas com submenus para Marcas
       {
         path: 'marcas',
@@ -81,6 +61,23 @@ export const routes: Routes = [
           {
             path: 'gerenciar',
             component: MarcaComponent,
+            data: { roles: ['ADMIN'] }, // ✅ Só admin pode acessar
+          },
+        ],
+      },
+
+      // Rotas com submenus para Marcas
+      {
+        path: 'pastas',
+        children: [
+          {
+            path: 'consulta',
+            component: PastaComponent,
+            data: { roles: ['ADMIN', 'GERENTE'] }, // ✅ Só admin pode acessar
+          },
+          {
+            path: 'gerenciar',
+            component: PastaComponent,
             data: { roles: ['ADMIN'] }, // ✅ Só admin pode acessar
           },
         ],
