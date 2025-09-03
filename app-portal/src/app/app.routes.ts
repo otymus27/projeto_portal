@@ -27,83 +27,83 @@ export const routes: Routes = [
   // { path: 'gerenciar-arquivos', component: FileManagementComponent }
 
   // // Redireciona a rota base para a página de login
-  // { path: '', redirectTo: 'login', pathMatch: 'full' },
+  { path: '', redirectTo: 'login', pathMatch: 'full' },
 
-  // // Rota para o componente de login
-  // { path: 'login', component: Login },
+  // Rota para o componente de login
+  { path: 'login', component: Login },
 
   // // ✅ Nova rota de nível superior para o usuário redefinir a senha
   // { path: 'redefinir-senha', component: RedefinicaoSenhaComponent },
 
-  // // Rota para o painel de administração (com sidebar, header, etc.)
-  // {
-  //   path: 'admin',
-  //   component: Principal,
-  //   canActivate: [AuthGuard], // <-- Adicione esta linha
-  //   children: [
-  //     // Rota padrão para o componente 'Início'
-  //     { path: '', redirectTo: 'home', pathMatch: 'full' },
-  //     {
-  //       path: 'home',
-  //       component: HomeComponent,
-  //       data: { roles: ['ADMIN', 'BASIC', 'GERENTE'] }, // ✅ Todos os perfis podem acessar
-  //     },
+  // Rota para o painel de administração (com sidebar, header, etc.)
+  {
+    path: 'admin',
+    component: Principal,
+    canActivate: [AuthGuard], // <-- Adicione esta linha
+    children: [
+      // Rota padrão para o componente 'Início'
+      { path: '', redirectTo: 'home', pathMatch: 'full' },
+      {
+        path: 'home',
+        component: HomeComponent,
+        data: { roles: ['ADMIN', 'BASIC', 'GERENTE'] }, // ✅ Todos os perfis podem acessar
+      },
 
-  //     // Rotas com submenus para Carros
-  //     {
-  //       path: 'carros',
-  //       children: [
-  //         // Rota para a lista de carros (Consulta)
-  //         { path: '', component: CarroComponent },
-  //         // Rota para gerenciar um carro (adição/edição)
-  //         { path: 'gerenciar', component: CarroComponent },
-  //       ],
-  //     },
+      // Rotas com submenus para Carros
+      {
+        path: 'carros',
+        children: [
+          // Rota para a lista de carros (Consulta)
+          { path: '', component: CarroComponent },
+          // Rota para gerenciar um carro (adição/edição)
+          { path: 'gerenciar', component: CarroComponent },
+        ],
+      },
 
-  //     // Rotas com submenus para Proprietarios
-  //     {
-  //       path: 'proprietarios',
-  //       children: [
-  //         { path: '', component: ProprietarioComponent },
-  //         { path: 'gerenciar', component: ProprietarioComponent },
-  //       ],
-  //     },
+      // Rotas com submenus para Proprietarios
+      {
+        path: 'proprietarios',
+        children: [
+          { path: '', component: ProprietarioComponent },
+          { path: 'gerenciar', component: ProprietarioComponent },
+        ],
+      },
 
-  //     // Rotas com submenus para Marcas
-  //     {
-  //       path: 'marcas',
-  //       children: [
-  //         {
-  //           path: 'consulta',
-  //           component: MarcaComponentRelatorio,
-  //           data: { roles: ['ADMIN', 'GERENTE'] }, // ✅ Só admin pode acessar
-  //         },
-  //         {
-  //           path: 'gerenciar',
-  //           component: MarcaComponent,
-  //           data: { roles: ['ADMIN'] }, // ✅ Só admin pode acessar
-  //         },
-  //       ],
-  //     },
+      // Rotas com submenus para Marcas
+      {
+        path: 'marcas',
+        children: [
+          {
+            path: 'consulta',
+            component: MarcaComponentRelatorio,
+            data: { roles: ['ADMIN', 'GERENTE'] }, // ✅ Só admin pode acessar
+          },
+          {
+            path: 'gerenciar',
+            component: MarcaComponent,
+            data: { roles: ['ADMIN'] }, // ✅ Só admin pode acessar
+          },
+        ],
+      },
 
-  //     // Rotas com submenus para Marcas
-  //     {
-  //       path: 'usuarios',
-  //       children: [
-  //         {
-  //           path: '',
-  //           component: UsuarioComponent,
-  //           data: { roles: ['ADMIN'] }, // ✅ Só admin pode acessar
-  //         },
-  //         {
-  //           path: 'gerenciar',
-  //           component: UsuarioComponent,
-  //           data: { roles: ['ADMIN'] }, // ✅ Só admin pode acessar
-  //         },
-  //       ],
-  //     },
-  //   ],
-  // },
+      // Rotas com submenus para Marcas
+      {
+        path: 'usuarios',
+        children: [
+          {
+            path: '',
+            component: UsuarioComponent,
+            data: { roles: ['ADMIN'] }, // ✅ Só admin pode acessar
+          },
+          {
+            path: 'gerenciar',
+            component: UsuarioComponent,
+            data: { roles: ['ADMIN'] }, // ✅ Só admin pode acessar
+          },
+        ],
+      },
+    ],
+  },
 
   // Rota wildcard para redirecionar URLs inválidas para a página de login
   { path: '**', redirectTo: 'login' },
