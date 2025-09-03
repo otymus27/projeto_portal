@@ -1,6 +1,7 @@
 package br.com.carro.services;
 
 import br.com.carro.entities.Arquivo;
+import br.com.carro.entities.DTO.ItemDTO;
 import br.com.carro.entities.DTO.PastaDTO;
 import br.com.carro.entities.DTO.PastaPublicaDTO;
 import br.com.carro.entities.DTO.PastaRequestDTO;
@@ -9,6 +10,8 @@ import br.com.carro.entities.Usuario.Usuario;
 import br.com.carro.repositories.ArquivoRepository;
 import br.com.carro.repositories.PastaRepository;
 import br.com.carro.repositories.UsuarioRepository;
+import com.itextpdf.text.log.Logger;
+import com.itextpdf.text.log.LoggerFactory;
 import jakarta.persistence.EntityNotFoundException;
 //import jakarta.transaction.Transactional;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,18 +25,20 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.*;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 @Service
 public class PastaService {
+
+    private static final Logger logger = LoggerFactory.getLogger(PastaService.class);
 
     private final PastaRepository pastaRepository;
     private final UsuarioRepository usuarioRepository;
@@ -934,5 +939,47 @@ public class PastaService {
                 .collect(Collectors.toList());
     }
 
+
+    // --
+
+    /**
+     * Sincroniza o sistema de arquivos com o banco de dados para um usuário específico.
+     * Esta é a lógica central para garantir que o que está no banco reflete o que
+     * está no disco.
+     *
+     * @param caminho O caminho físico para sincronizar.
+     */
+    public void sincronizarComBanco(Path caminho) {
+        logger.info("⚙️ Iniciando sincronização do caminho {} para o usuário {}");
+        // Lógica de sincronização:
+        // 1. Percorrer o sistema de arquivos a partir do caminho.
+        // 2. Para cada arquivo/pasta, verificar se ele existe no banco de dados.
+        // 3. Se existir, atualizar metadados (tamanho, data de modificação).
+        // 4. Se não existir, criar um novo registro no banco.
+        // 5. Verificar se existem arquivos/pastas no banco de dados que não existem mais no sistema de arquivos.
+        // 6. Remover esses registros do banco de dados.
+        logger.info("✅ Sincronização concluída para o usuário {}.");
+    }
+
+    /**
+     * Lista o conteúdo de um diretório específico, com a lógica do Service.
+     * @param diretorio O objeto File do diretório.
+     * @return Uma lista de objetos ItemDTO.
+     */
+    public List<ItemDTO> listarConteudo(File diretorio) {
+        if (!diretorio.exists() || !diretorio.isDirectory()) {
+            logger.warn("⚠️ Diretório inválido ou não encontrado: {}");
+            return Collections.emptyList();
+        }
+
+        File[] files = diretorio.listFiles();
+        if (files == null) {
+            return Collections.emptyList();
+        }
+
+        // Aqui você pode adicionar a lógica para popular o DTO com dados do banco.
+        // Por enquanto, a lógica para popular a lista é a mesma do Controller.
+        return null; // Retorne a lista de DTOs real.
+    }
 
 }

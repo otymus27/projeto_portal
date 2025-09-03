@@ -132,15 +132,18 @@ public class SecurityConfigurations {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))                 
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(HttpMethod.POST, "/login").permitAll() // ✅ Permite acesso público ao endpoint de login
+                        // ✅ Permite POST para /api/login sem autenticação
+                        .requestMatchers(HttpMethod.POST, "/api/login").permitAll()
+                        // ✅ Permite OPTIONS para qualquer endpoint
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         // ✅ Permite acesso a qualquer rota pública (incluindo as novas)
                         .requestMatchers(HttpMethod.GET, "/api/publico/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/pasta/top-level").permitAll()
-                    // ✅ Permite OPTIONS para qualquer endpoint
-                    .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+//                        .requestMatchers(HttpMethod.GET, "/api/pasta/top-level").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/privado/pastas/download").authenticated() // ✅ Novo: Protege especificamente o download
 
-                    .requestMatchers(HttpMethod.POST, "/login").permitAll() // ✅ Permite acesso público ao endpoint de login
-                    // ✅ Permite POST para /api/login sem autenticação
-                    .requestMatchers(HttpMethod.POST, "/api/login").permitAll()
+
+
 
                     .anyRequest().authenticated()
                 )
