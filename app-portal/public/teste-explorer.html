@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Explorador de Arquivos</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background-color: #f0f2f5; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h1 { color: #333; margin-bottom: 20px; text-align: center; }
+        .breadcrumb { margin-bottom: 20px; font-size: 14px; color: #555; display: flex; align-items: center; }
+        .breadcrumb a { text-decoration: none; color: #007bff; margin-right: 5px; }
+        .file-list { list-style: none; padding: 0; }
+        .file-list li { padding: 10px; border-bottom: 1px solid #eee; display: flex; align-items: center; }
+        .file-list li:last-child { border-bottom: none; }
+        .file-list li a { text-decoration: none; color: #333; display: flex; align-items: center; font-size: 16px; }
+        .file-list li a:hover { background-color: #f9f9f9; cursor: pointer; }
+        .icon { margin-right: 10px; font-size: 20px; }
+        .folder-icon { color: #ffc107; }
+        .file-icon { color: #9e9e9e; }
+        .error { color: #dc3545; text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Explorador de Arquivos Públicos</h1>
+        <div class="breadcrumb" id="breadcrumb"></div>
+        <ul class="file-list" id="file-list">
+            </ul>
+    </div>
+
+    <script>
+        const API_URL_LISTAR = 'http://localhost:8082/api/publico/arquivos';
+        const API_URL_DOWNLOAD = 'http://localhost:8082/api/publico/arquivos/download';
+        const fileList = document.getElementById('file-list');
+        const breadcrumb = document.getElementById('breadcrumb');
+        let caminhoAtual = '';
+
+        function carregarConteudo(caminho = '') {
+            caminhoAtual = caminho;
+            fileList.innerHTML = '';
+            breadcrumb.innerHTML = '';
+
+            if (caminho) {
+                const partesDoCaminho = caminho.split('/');
+                const caminhoPai = partesDoCaminho.slice(0, -1).join('/');
+
+                const voltarLink = document.createElement('a');
+                voltarLink.href = '#';
+                voltarLink.textContent = '🔙 Voltar';
+                voltarLink.onclick = () => carregarConteudo(caminhoPai);
+                breadcrumb.appendChild(voltarLink);
+                breadcrumb.appendChild(document.createTextNode(' / '));
+                
+                let caminhoAcumulado = '';
+                partesDoCaminho.forEach((parte, index) => {
+                    caminhoAcumulado += (index === 0 ? '' : '/') + parte;
+                    const link = document.createElement('a');
+                    link.href = '#';
+                    link.textContent = parte;
+                    link.onclick = () => carregarConteudo(caminhoAcumulado);
+                    breadcrumb.appendChild(link);
+                    if (index < partesDoCaminho.length - 1) {
+                        breadcrumb.appendChild(document.createTextNode(' > '));
+                    }
+                });
+            } else {
+                breadcrumb.textContent = 'Pasta Raiz';
+            }
+
+            const url = `${API_URL_LISTAR}?caminho=${encodeURIComponent(caminho)}`;
+            
+            fetch(url)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`Erro: ${response.status} ${response.statusText}`);
+                    }
+                    return response.json();
+                })
+                .then(items => {
+                    if (items.length === 0) {
+                        const li = document.createElement('li');
+                        li.textContent = 'Esta pasta está vazia.';
+                        fileList.appendChild(li);
+                        return;
+                    }
+
+                    items.forEach(item => {
+                        const li = document.createElement('li');
+                        const a = document.createElement('a');
+
+                        if (item.isDiretorio) {
+                            a.href = '#';
+                            a.onclick = () => carregarConteudo(caminho ? `${caminho}/${item.nome}` : item.nome);
+                            a.innerHTML = `<span class="icon folder-icon">📁</span>${item.nome}`;
+                        } else {
+                            // ✅ MUDANÇA: Link agora aponta para o endpoint de download
+                            const fileDownloadPath = caminho ? `${caminho}/${item.nome}` : item.nome;
+                            a.href = `${API_URL_DOWNLOAD}?caminho=${encodeURIComponent(fileDownloadPath)}`;
+                            a.download = item.nome; // Sugere o nome do arquivo para o navegador
+                            a.target = "_blank"; // Opcional: abre o download em uma nova aba
+                            a.innerHTML = `<span class="icon file-icon">📄</span>${item.nome}`;
+                        }
+                        
+                        li.appendChild(a);
+                        fileList.appendChild(li);
+                    });
+                })
+                .catch(error => {
+                    console.error('Falha na requisição:', error);
+                    fileList.innerHTML = `<li class="error">${error.message}</li>`;
+                });
+        }
+
+        carregarConteudo();
+    </script>
+</body>
+</html>
