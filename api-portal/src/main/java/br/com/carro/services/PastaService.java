@@ -933,4 +933,6 @@ public class PastaService {
                 .map(pasta -> new PastaPublicaDTO(pasta.getId(), pasta.getNomePasta(), pasta.getCaminhoCompleto()))
                 .collect(Collectors.toList());
     }
+
+
 }
