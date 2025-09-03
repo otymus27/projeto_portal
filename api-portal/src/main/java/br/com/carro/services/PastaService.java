@@ -2,6 +2,7 @@ package br.com.carro.services;
 
 import br.com.carro.entities.Arquivo;
 import br.com.carro.entities.DTO.PastaDTO;
+import br.com.carro.entities.DTO.PastaPublicaDTO;
 import br.com.carro.entities.DTO.PastaRequestDTO;
 import br.com.carro.entities.Pasta;
 import br.com.carro.entities.Usuario.Usuario;
@@ -921,24 +922,15 @@ public class PastaService {
     }
 
 
-    /**
-     * Retorna uma lista de pastas de nível superior, ou seja, aquelas que não têm uma pasta pai.
-     */
-    public List<Pasta> findPastasTopLevel() {
-        return pastaRepository.findByPastaPaiIsNull();
+    public List<PastaPublicaDTO> findPastasTopLevelDTO() {
+        return pastaRepository.findByPastaPaiIsNull().stream()
+                .map(pasta -> new PastaPublicaDTO(pasta.getId(), pasta.getNomePasta(), pasta.getCaminhoCompleto()))
+                .collect(Collectors.toList());
     }
 
-    /**
-     * Retorna uma lista de subpastas de uma pasta específica, identificada pelo ID da pasta pai.
-     */
-    public List<Pasta> findSubpastasByPastaPaiId(Long pastaPaiId) {
-        return pastaRepository.findByPastaPaiId(pastaPaiId);
-    }
-
-    /**
-     * Retorna uma pasta específica pelo seu ID.
-     */
-    public Optional<Pasta> findById(Long id) {
-        return pastaRepository.findById(id);
+    public List<PastaPublicaDTO> findSubpastasByPastaPaiIdDTO(Long pastaPaiId) {
+        return pastaRepository.findByPastaPaiId(pastaPaiId).stream()
+                .map(pasta -> new PastaPublicaDTO(pasta.getId(), pasta.getNomePasta(), pasta.getCaminhoCompleto()))
+                .collect(Collectors.toList());
     }
 }

@@ -93,13 +93,22 @@ public class SecurityConfigurations {
         CorsConfiguration configuration = new CorsConfiguration();
 
         // Usado para só desenvolvimento
-        configuration.addAllowedOrigin("http://localhost:4200");  // ou http://localhost
-        configuration.addAllowedOrigin("http://localhost");  // ou http://localhost
+//        configuration.addAllowedOrigin("http://localhost:4200");  // ou http://localhost
+//        configuration.addAllowedOrigin("http://localhost:8082");  // ou http://localhost
+//        configuration.addAllowedOrigin("http://localhost");
+//        configuration.addAllowedOrigin("null"); // Para acesso via arquivo local (file://)
 
 
          // ✅ CORREÇÃO: Liste explicitamente as origens permitidas depois tem que apagar
          // Inclui a sua aplicação local e "null" para o acesso via arquivo HTML
-         configuration.setAllowedOrigins(Arrays.asList("http://localhost:8082", "null"));
+         configuration.setAllowedOrigins(Arrays.asList(
+                 "http://localhost:4200", // Origem do seu frontend Angular
+                 "http://localhost:8082", // Opcional, mas útil para testes
+                 "http://localhost",
+                 "http://localhost:86",
+                 "http://10.85.190.202:86",
+                 "null" // Para acesso via arquivo local (file://)
+         ));
         
         
         // Usado para produção
@@ -123,6 +132,8 @@ public class SecurityConfigurations {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))                 
                 .authorizeHttpRequests(auth -> auth
+                        // ✅ Permite acesso a qualquer rota pública (incluindo as novas)
+                        .requestMatchers(HttpMethod.GET, "/api/publico/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/pasta/top-level").permitAll()
                     // ✅ Permite OPTIONS para qualquer endpoint
                     .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()

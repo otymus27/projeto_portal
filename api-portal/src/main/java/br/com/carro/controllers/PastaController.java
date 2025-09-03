@@ -1,10 +1,7 @@
 package br.com.carro.controllers;
 
 import br.com.carro.autenticacao.JpaUserDetailsService;
-import br.com.carro.entities.DTO.PastaCopiarDTO;
-import br.com.carro.entities.DTO.PastaDTO;
-import br.com.carro.entities.DTO.PastaMoverDTO;
-import br.com.carro.entities.DTO.PastaRequestDTO;
+import br.com.carro.entities.DTO.*;
 import br.com.carro.entities.Pasta;
 import br.com.carro.entities.Usuario.Usuario;
 import br.com.carro.services.PastaService;
@@ -53,10 +50,14 @@ public class PastaController {
         this.userDetailsService = userDetailsService;
     }
 
-    // Endpoint público para obter as pastas de nível superior
     @GetMapping("/top-level")
-    public List<Pasta> getPastasTopLevel() {
-        return pastaService.findPastasTopLevel(); // Crie este método no seu serviço
+    public List<PastaPublicaDTO> getPastasTopLevel() {
+        return pastaService.findPastasTopLevelDTO();
+    }
+
+    @GetMapping("/subpastas/{id}")
+    public List<PastaPublicaDTO> getSubpastas(@PathVariable Long id) {
+        return pastaService.findSubpastasByPastaPaiIdDTO(id);
     }
 
     @GetMapping("/principais")
